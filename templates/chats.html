@@ -1,0 +1,1017 @@
+{% extends "base.html" %}
+
+{% block title %}Чаты - Мессенджер{% endblock %}
+
+{% block content %}
+<div class="chats-fullscreen">
+    <style>
+    /* Стили для chats.html */
+    * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+    }
+
+    html, body {
+        height: 100%;
+        width: 100%;
+        background: var(--bg-primary);
+    }
+
+    body {
+        display: block;
+        overflow: hidden;
+    }
+
+    .chats-fullscreen {
+        width: 100vw;
+        height: 100vh;
+        background: var(--bg-secondary);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+    }
+
+    .chats-header {
+        padding: 15px 20px;
+        background: var(--bg-secondary);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .user-info {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+    }
+
+    .avatar {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--accent);
+    }
+
+    .user-details h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+    }
+
+    .user-details p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .status {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+    }
+
+    .status.online {
+        background: var(--success);
+    }
+
+    .status.offline {
+        background: var(--text-muted);
+    }
+
+    .header-actions {
+        display: flex;
+        gap: 10px;
+    }
+
+    .btn-icon {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--bg-tertiary);
+        border: none;
+        color: var(--text-primary);
+        font-size: 20px;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-decoration: none;
+    }
+
+    .btn-icon:hover {
+        background: var(--bg-hover);
+    }
+
+    .search-bar {
+        padding: 10px 15px;
+        background: var(--bg-tertiary);
+        margin: 10px 15px;
+        border-radius: 24px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+
+    .search-bar span {
+        color: var(--text-muted);
+    }
+
+    .search-bar input {
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        width: 100%;
+        font-size: 15px;
+    }
+
+    .search-bar input::placeholder {
+        color: var(--text-muted);
+    }
+
+    .search-bar input:focus {
+        outline: none;
+    }
+
+    .action-buttons {
+        display: flex;
+        padding: 0 15px 10px;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+
+    .btn {
+        padding: 12px 16px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-hover);
+    }
+
+    .btn-sm {
+        padding: 10px 12px;
+        font-size: 13px;
+    }
+
+    .chats-title {
+        padding: 0 15px 10px;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .chats-title span {
+        padding: 10px 0;
+        color: var(--accent);
+        border-bottom: 2px solid var(--accent);
+        font-weight: 600;
+        display: inline-block;
+    }
+
+    .chats-list {
+        flex: 1;
+        overflow-y: auto;
+        padding: 10px 15px;
+        background: var(--bg-secondary);
+    }
+
+    .chat-item-wrapper {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 8px;
+        background: var(--bg-tertiary);
+        border-radius: 12px;
+        border: 1px solid transparent;
+        transition: var(--transition);
+    }
+
+    .chat-item-wrapper:hover {
+        border-color: var(--accent);
+        background: var(--bg-hover);
+    }
+
+    .chat-item {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        padding: 12px;
+        text-decoration: none;
+        color: var(--text-primary);
+    }
+
+    .chat-avatar {
+        position: relative;
+        margin-right: 12px;
+        flex-shrink: 0;
+    }
+
+    .chat-avatar img {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        object-fit: cover;
+    }
+
+    .chat-avatar .status {
+        position: absolute;
+        bottom: 0;
+        right: 0;
+        width: 12px;
+        height: 12px;
+        border: 2px solid var(--bg-tertiary);
+    }
+
+    .unread-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: var(--accent);
+        color: white;
+        border-radius: 50%;
+        width: 22px;
+        height: 22px;
+        font-size: 12px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        font-weight: bold;
+        border: 2px solid var(--bg-tertiary);
+    }
+
+    .chat-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .chat-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 4px;
+    }
+
+    .chat-header h3 {
+        font-size: 16px;
+        font-weight: 600;
+        color: var(--text-primary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin: 0;
+    }
+
+    .chat-time {
+        font-size: 11px;
+        color: var(--text-muted);
+        white-space: nowrap;
+        margin-left: 8px;
+    }
+
+    .chat-preview {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .chat-preview p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        margin: 0;
+        max-width: 200px;
+    }
+
+    .you-label, .sender-label {
+        color: var(--text-muted);
+    }
+
+    .chat-badge {
+        background: var(--accent);
+        color: white;
+        border-radius: 12px;
+        padding: 2px 8px;
+        font-size: 11px;
+        font-weight: 600;
+        margin-left: 8px;
+        white-space: nowrap;
+    }
+
+    .delete-chat-btn {
+        background: transparent;
+        border: none;
+        color: var(--text-muted);
+        font-size: 18px;
+        padding: 8px 12px;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: var(--transition);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        opacity: 0.7;
+        margin-right: 12px;
+    }
+
+    .delete-chat-btn:hover {
+        background: var(--danger-bg);
+        color: var(--danger);
+        opacity: 1;
+    }
+
+    .chat-item-wrapper:hover .delete-chat-btn {
+        opacity: 1;
+    }
+
+    .empty-chats {
+        text-align: center;
+        padding: 60px 20px;
+        color: var(--text-muted);
+    }
+
+    .empty-icon {
+        font-size: 64px;
+        display: block;
+        margin-bottom: 20px;
+        color: var(--text-muted);
+    }
+
+    .empty-chats h3 {
+        margin-bottom: 10px;
+        color: var(--text-primary);
+    }
+
+    /* Модальные окна */
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: var(--bg-secondary);
+        border-radius: 20px;
+        padding: 30px;
+        max-width: 450px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .modal-header h2 {
+        font-size: 22px;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    .close-modal {
+        font-size: 30px;
+        color: var(--text-muted);
+        cursor: pointer;
+    }
+
+    .close-modal:hover {
+        color: var(--danger);
+    }
+
+    .form-group {
+        margin-bottom: 20px;
+    }
+
+    .form-group label {
+        display: block;
+        color: var(--text-secondary);
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: 500;
+    }
+
+    .form-group input,
+    .form-group textarea {
+        width: 100%;
+        padding: 14px 16px;
+        background: var(--bg-tertiary);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        color: var(--text-primary);
+        font-size: 15px;
+    }
+
+    .form-group input:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    .modal-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+    }
+
+    .modal-actions button {
+        flex: 1;
+    }
+
+    /* Анимации */
+    @keyframes slideIn {
+        from {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+        to {
+            transform: translateX(0);
+            opacity: 1;
+        }
+    }
+
+    @keyframes slideOut {
+        from {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        to {
+            transform: translateX(100%);
+            opacity: 0;
+        }
+    }
+
+    /* Скрываем стандартный контейнер */
+    .app-container,
+    .sidebar,
+    .main-content {
+        display: none;
+    }
+
+    /* Мобильная адаптация */
+    @media (max-width: 768px) {
+        .chats-header {
+            padding: 12px 15px;
+        }
+
+        .search-bar {
+            margin: 8px 15px;
+        }
+
+        .chats-list {
+            padding: 10px 15px;
+        }
+
+        .chat-preview p {
+            max-width: 150px;
+        }
+
+        .delete-chat-btn {
+            opacity: 1;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .chat-preview p {
+            max-width: 120px;
+        }
+
+        .btn-sm {
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+    }
+</style>
+    <!-- Шапка -->
+    <div class="chats-header">
+        <div class="user-info">
+            <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
+                 alt="Avatar"
+                 class="avatar"
+                 onclick="window.location.href='{{ url_for('profile', user_id=current_user.id) }}'"
+                 style="cursor: pointer;">
+            <div class="user-details">
+                <h3>{{ current_user.username }}</h3>
+                <p>
+                    <span class="status online"></span>
+                    Онлайн
+                </p>
+            </div>
+        </div>
+        <div class="header-actions">
+            <button class="btn-icon" onclick="showCreateGroupModal()" title="Создать группу">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <use xlink:href="#icon-group"></use>
+                </svg>
+            </button>
+            <a href="{{ url_for('logout') }}" class="btn-icon" title="Выйти">
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-logout"></use>
+                </svg>
+            </a>
+        </div>
+    </div>
+
+    <!-- Поиск -->
+    <div class="search-bar">
+        <svg width="20" height="20" viewBox="0 0 1024 1024">
+            <use xlink:href="#icon-search"></use>
+        </svg>
+        <input type="text" placeholder="Поиск или начать новый чат" id="searchInput">
+    </div>
+
+    <!-- Кнопки действий -->
+    <div class="action-buttons">
+        <button class="btn btn-secondary btn-sm" onclick="showNewChatForm()">
+            <svg width="18" height="18" viewBox="0 0 1024 1024" style="margin-right: 6px;">
+                <use xlink:href="#icon-chat"></use>
+            </svg>
+            Личный чат
+        </button>
+        <button class="btn btn-secondary btn-sm" onclick="showCreateGroupModal()">
+            <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 6px;">
+                <use xlink:href="#icon-group"></use>
+            </svg>
+            Группа
+        </button>
+    </div>
+
+    <!-- Заголовок списка -->
+    <div class="chats-title">
+        <span>Все чаты</span>
+    </div>
+
+    <!-- Список чатов -->
+    <div class="chats-list" id="chatsList">
+        {% if chats %}
+            {% for chat in chats %}
+                {% if chat.type == 'private' %}
+                <div class="chat-item-wrapper" data-chat-id="{{ chat.id }}" data-type="private">
+                    <a href="{{ url_for('chat', chat_id=chat.id) }}" class="chat-item">
+                        <div class="chat-avatar">
+                            <img src="{{ url_for('static', filename='uploads/' + chat.other_user.avatar) }}"
+                                 alt="Avatar"
+                                 onerror="this.src='{{ url_for('static', filename='uploads/avatars/default.png') }}'">
+                            <span class="status {{ chat.other_user.status }}"></span>
+                            {% if chat.unread_count > 0 %}
+                            <span class="unread-badge">{{ chat.unread_count }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="chat-info">
+                            <div class="chat-header">
+                                <h3>{{ chat.other_user.username }}</h3>
+                                <span class="chat-time">{{ chat.last_message_time.strftime('%H:%M') }}</span>
+                            </div>
+                            <div class="chat-preview">
+                                <p>
+                                    {% if chat.last_message %}
+                                        {% if chat.last_message.sender_id == current_user.id %}
+                                            <span class="you-label">Вы: </span>
+                                        {% endif %}
+                                        {% if chat.last_message.content %}
+                                            {{ chat.last_message.content[:30] }}
+                                        {% elif chat.last_message.image_path %}
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                                                <use xlink:href="#icon-image"></use>
+                                            </svg>
+                                            Фото
+                                        {% elif chat.last_message.file_path %}
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                                                <use xlink:href="#icon-file"></use>
+                                            </svg>
+                                            {{ chat.last_message.file_name[:20] if chat.last_message.file_name else 'Файл' }}
+                                        {% endif %}
+                                    {% else %}
+                                        Нет сообщений
+                                    {% endif %}
+                                </p>
+                                {% if chat.unread_count > 0 %}
+                                <span class="chat-badge">{{ chat.unread_count }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </a>
+                    <!-- Кнопка удаления -->
+                    <button class="delete-chat-btn" onclick="event.preventDefault(); event.stopPropagation(); deleteChat({{ chat.id }}, '{{ chat.other_user.username }}')" title="Удалить чат">
+                        <svg width="20" height="20" viewBox="0 0 1024 1024">
+                            <use xlink:href="#icon-delete"></use>
+                        </svg>
+                    </button>
+                </div>
+                {% elif chat.type == 'group' %}
+                <div class="chat-item-wrapper" data-chat-id="{{ chat.id }}" data-type="group">
+                    <a href="{{ url_for('group_chat', group_id=chat.id) }}" class="chat-item">
+                        <div class="chat-avatar">
+                            <img src="{{ url_for('static', filename='uploads/' + chat.group.icon) }}"
+                                 alt="Group"
+                                 onerror="this.src='{{ url_for('static', filename='uploads/group_icons/default.png') }}'">
+                            {% if chat.unread_count > 0 %}
+                            <span class="unread-badge">{{ chat.unread_count }}</span>
+                            {% endif %}
+                        </div>
+                        <div class="chat-info">
+                            <div class="chat-header">
+                                <h3>{{ chat.group.name }}</h3>
+                                <span class="chat-time">{{ chat.last_message_time.strftime('%H:%M') }}</span>
+                            </div>
+                            <div class="chat-preview">
+                                <p>
+                                    {% if chat.last_message %}
+                                        {% if chat.last_message.sender_id == current_user.id %}
+                                            <span class="you-label">Вы: </span>
+                                        {% else %}
+                                            <span class="sender-label">{{ chat.last_message.sender.username if chat.last_message.sender else 'Пользователь' }}: </span>
+                                        {% endif %}
+                                        {% if chat.last_message.content %}
+                                            {{ chat.last_message.content[:30] }}
+                                        {% elif chat.last_message.image_path %}
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                                                <use xlink:href="#icon-image"></use>
+                                            </svg>
+                                            Фото
+                                        {% elif chat.last_message.file_path %}
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                                                <use xlink:href="#icon-file"></use>
+                                            </svg>
+                                            {{ chat.last_message.file_name[:20] if chat.last_message.file_name else 'Файл' }}
+                                        {% endif %}
+                                    {% else %}
+                                        Нет сообщений
+                                    {% endif %}
+                                </p>
+                                {% if chat.unread_count > 0 %}
+                                <span class="chat-badge">{{ chat.unread_count }}</span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </a>
+                </div>
+                {% endif %}
+            {% endfor %}
+        {% else %}
+            <div class="empty-chats">
+                <span class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-chat"></use>
+                    </svg>
+                </span>
+                <h3>Нет чатов</h3>
+                <p>Начните новый чат или создайте группу</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Модальное окно нового чата -->
+<div class="modal" id="newChatModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 1024 1024" style="margin-right: 10px;">
+                    <use xlink:href="#icon-chat"></use>
+                </svg>
+                Новый личный чат
+            </h2>
+            <span class="close-modal" onclick="hideNewChatForm()">&times;</span>
+        </div>
+        <form method="POST" action="{{ url_for('start_chat') }}">
+            <div class="form-group">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" placeholder="Введите username" required>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="hideNewChatForm()">Отмена</button>
+                <button type="submit" class="btn">Начать чат</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Модальное окно создания группы -->
+<div class="modal" id="createGroupModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 24 24" style="margin-right: 10px;">
+                    <use xlink:href="#icon-group"></use>
+                </svg>
+                Создать группу
+            </h2>
+            <span class="close-modal" onclick="hideCreateGroupModal()">&times;</span>
+        </div>
+        <form id="createGroupForm" enctype="multipart/form-data">
+            <div class="form-group">
+                <label>Название группы</label>
+                <input type="text" name="name" placeholder="Например: Друзья" required>
+            </div>
+            <div class="form-group">
+                <label>Описание</label>
+                <textarea name="description" placeholder="Опишите тему группы..."></textarea>
+            </div>
+            <div class="form-group">
+                <label>Иконка группы</label>
+                <input type="file" name="icon" accept="image/*">
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" onclick="hideCreateGroupModal()">Отмена</button>
+                <button type="submit" class="btn">Создать группу</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Функции для модальных окон
+    function showNewChatForm() {
+        document.getElementById('newChatModal').classList.add('active');
+    }
+
+    function hideNewChatForm() {
+        document.getElementById('newChatModal').classList.remove('active');
+    }
+
+    function showCreateGroupModal() {
+        document.getElementById('createGroupModal').classList.add('active');
+    }
+
+    function hideCreateGroupModal() {
+        document.getElementById('createGroupModal').classList.remove('active');
+    }
+
+    // Создание группы
+    document.getElementById('createGroupForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('/group/create', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.redirected) {
+                window.location.href = response.url;
+            } else {
+                return response.json().then(data => {
+                    alert(data.error || 'Ошибка при создании группы');
+                });
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при создании группы');
+        });
+    });
+
+    // Удаление чата
+    function deleteChat(chatId, chatName) {
+        if (confirm(`Удалить чат с ${chatName}? Все сообщения будут удалены.`)) {
+            fetch(`/chat/${chatId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    const chatElement = document.querySelector(`.chat-item-wrapper[data-chat-id="${chatId}"][data-type="private"]`);
+                    if (chatElement) {
+                        chatElement.remove();
+                    }
+                    const chatsList = document.querySelector('.chats-list');
+                    if (chatsList.children.length === 0) {
+                        chatsList.innerHTML = `
+                            <div class="empty-chats">
+                                <span class="empty-icon">
+                                    <svg width="64" height="64" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-chat"></use>
+                                    </svg>
+                                </span>
+                                <h3>Нет чатов</h3>
+                                <p>Начните новый чат или создайте группу</p>
+                            </div>
+                        `;
+                    }
+                    showNotification('Чат успешно удален', 'success');
+                } else {
+                    alert(data.error || 'Ошибка при удалении чата');
+                }
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+                alert('Ошибка при удалении чата');
+            });
+        }
+    }
+
+    // Закрытие модальных окон по клику на оверлей
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('active');
+            }
+        });
+    });
+
+    // Поиск по чатам
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const query = e.target.value.toLowerCase();
+        document.querySelectorAll('.chat-item-wrapper').forEach(wrapper => {
+            const title = wrapper.querySelector('h3').textContent.toLowerCase();
+            wrapper.style.display = title.includes(query) ? 'flex' : 'none';
+        });
+    });
+
+    // Закрытие модальных окон по ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            document.querySelectorAll('.modal.active').forEach(modal => {
+                modal.classList.remove('active');
+            });
+        }
+    });
+
+    // Функция показа уведомлений
+    function showNotification(message, type = 'success') {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            background: ${type === 'success' ? 'linear-gradient(135deg, #2ed573 0%, #1abc9c 100%)' : 'linear-gradient(135deg, #ff4757 0%, #ff3838 100%)'};
+        `;
+        document.body.appendChild(notification);
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // ==========================================
+    // АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ЧАТОВ (2 секунды)
+    // ==========================================
+    let refreshInterval = null;
+
+    function startAutoRefresh() {
+        if (refreshInterval) clearInterval(refreshInterval);
+        refreshInterval = setInterval(() => {
+            fetchChatsList();
+        }, 1000); // 1 секунда
+    }
+
+    function fetchChatsList() {
+        // Используем ваш существующий маршрут
+        fetch('/api/get_chats_data')
+            .then(response => {
+                if (!response.ok) throw new Error('Network response was not ok');
+                return response.json();
+            })
+            .then(data => {
+                updateChatsList(data.chats);
+            })
+            .catch(error => {
+                console.error('Ошибка обновления чатов:', error);
+            });
+    }
+
+    function updateChatsList(chats) {
+        const chatsList = document.getElementById('chatsList');
+        if (!chatsList) return;
+
+        const scrollTop = chatsList.scrollTop;
+        let newHtml = '';
+        
+        if (chats && chats.length > 0) {
+            chats.forEach(chat => {
+                if (chat.type === 'private') {
+                    // Адаптация под ключи вашего API: other_username, other_avatar, last_message
+                    newHtml += `
+                    <div class="chat-item-wrapper" data-chat-id="${chat.id}" data-type="private">
+                        <a href="${chat.chat_url}" class="chat-item">
+                            <div class="chat-avatar">
+                                <img src="${chat.other_avatar}" alt="Avatar" onerror="this.src='/static/uploads/avatars/default.png'">
+                                <span class="status ${chat.other_status}"></span>
+                                ${chat.unread_count > 0 ? `<span class="unread-badge">${chat.unread_count}</span>` : ''}
+                            </div>
+                            <div class="chat-info">
+                                <div class="chat-header">
+                                    <h3>${chat.other_username}</h3>
+                                    <span class="chat-time">${chat.last_message_time}</span>
+                                </div>
+                                <div class="chat-preview">
+                                    <p>${chat.last_message}</p>
+                                    ${chat.unread_count > 0 ? `<span class="chat-badge">${chat.unread_count}</span>` : ''}
+                                </div>
+                            </div>
+                        </a>
+                        <button class="delete-chat-btn" onclick="event.preventDefault(); event.stopPropagation(); deleteChat(${chat.id}, '${chat.other_username}')" title="Удалить чат">
+                            <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                <use xlink:href="#icon-delete"></use>
+                            </svg>
+                        </button>
+                    </div>`;
+                } else if (chat.type === 'group') {
+                    // Адаптация под ключи вашего API: group_name, group_icon
+                    newHtml += `
+                    <div class="chat-item-wrapper" data-chat-id="${chat.id}" data-type="group">
+                        <a href="${chat.chat_url}" class="chat-item">
+                            <div class="chat-avatar">
+                                <img src="${chat.group_icon}" alt="Group" onerror="this.src='/static/uploads/group_icons/default.png'">
+                                ${chat.unread_count > 0 ? `<span class="unread-badge">${chat.unread_count}</span>` : ''}
+                            </div>
+                            <div class="chat-info">
+                                <div class="chat-header">
+                                    <h3>${chat.group_name}</h3>
+                                    <span class="chat-time">${chat.last_message_time}</span>
+                                </div>
+                                <div class="chat-preview">
+                                    <p>${chat.last_message}</p>
+                                    ${chat.unread_count > 0 ? `<span class="chat-badge">${chat.unread_count}</span>` : ''}
+                                </div>
+                            </div>
+                        </a>
+                    </div>`;
+                }
+            });
+        } else {
+            newHtml = `
+            <div class="empty-chats">
+                <span class="empty-icon">
+                    <svg width="64" height="64" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-chat"></use>
+                    </svg>
+                </span>
+                <h3>Нет чатов</h3>
+                <p>Начните новый чат или создайте группу</p>
+            </div>`;
+        }
+
+        // Обновляем DOM только если контент изменился (чтобы не сбрасывать фокус и анимации лишний раз)
+        if (chatsList.innerHTML !== newHtml) {
+            chatsList.innerHTML = newHtml;
+            chatsList.scrollTop = scrollTop; 
+        }
+    }
+
+    // Запуск при загрузке
+    document.addEventListener('DOMContentLoaded', function() {
+        startAutoRefresh();
+    });
+
+    // Пауза при скрытии вкладки
+    // document.addEventListener('visibilitychange', function() {
+    //     if (document.hidden) {
+    //         if (refreshInterval) clearInterval(refreshInterval);
+    //     } else {
+    //         startAutoRefresh();
+    //     }
+    // });
+</script>
+
+{% endblock %}

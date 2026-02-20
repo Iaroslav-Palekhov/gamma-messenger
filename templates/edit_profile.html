@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+
+{% block title %}Редактирование профиля - Мессенджер{% endblock %}
+
+{% block content %}
+<div class="auth-container" style="max-width: 500px;">
+    <div class="logo">
+        <div class="logo-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24">
+                <use xlink:href="#icon-edit"></use>
+            </svg>
+        </div>
+        <h1>Редактировать профиль</h1>
+    </div>
+
+    <form id="profileForm" enctype="multipart/form-data">
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div class="profile-avatar" style="display: inline-block; position: relative;">
+                <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
+                     alt="Avatar"
+                     id="avatarPreview"
+                     style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid var(--accent);">
+                <label for="avatarInput" style="position: absolute; bottom: 0; right: 0; background: var(--accent); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" style="color: white;">
+                        <use xlink:href="#icon-edit"></use>
+                    </svg>
+                </label>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Аватар</label>
+            <input type="file" name="avatar" id="avatarInput" accept="image/*" style="display: none;">
+            <small style="color: var(--text-muted); display: block; margin-top: 5px;">
+                Рекомендуемый размер: 500x500px
+            </small>
+        </div>
+
+        <div class="form-group">
+            <label>Имя пользователя</label>
+            <input type="text" name="username" value="{{ current_user.username }}" required>
+        </div>
+
+        <div class="form-group">
+            <label>О себе</label>
+            <textarea name="bio" placeholder="Расскажите немного о себе...">{{ current_user.bio }}</textarea>
+        </div>
+
+        <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
+            <button type="submit" class="btn btn-primary" style="flex: 1;">
+                <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
+                    <use xlink:href="#icon-check"></use>
+                </svg>
+                Сохранить
+            </button>
+            <a href="{{ url_for('profile', user_id=current_user.id) }}" class="btn btn-secondary" style="flex: 1;">
+                <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
+                    <use xlink:href="#icon-delete"></use>
+                </svg>
+                Отмена
+            </a>
+        </div>
+    </form>
+</div>
+
+<script>
+    document.getElementById('avatarInput').addEventListener('change', function(e) {
+        if (this.files && this.files[0]) {
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('avatarPreview').src = e.target.result;
+            };
+            reader.readAsDataURL(this.files[0]);
+        }
+    });
+
+    document.getElementById('profileForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+
+        fetch('{{ url_for("edit_profile") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                window.location.href = '{{ url_for("profile", user_id=current_user.id) }}';
+            } else {
+                alert(data.error || 'Ошибка при сохранении');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Ошибка при сохранении');
+        });
+    });
+</script>
+{% endblock %}

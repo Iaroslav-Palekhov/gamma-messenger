@@ -1,0 +1,128 @@
+{% extends "base.html" %}
+
+{% block title %}Профиль {{ profile_user.username }} - Мессенджер{% endblock %}
+
+{% block content %}
+<div class="profile-container">
+    <!-- Кнопка назад в общем стиле -->
+    <div style="margin-bottom: 20px;">
+        <a href="javascript:history.back()" class="btn-icon" style="background: var(--bg-tertiary); display: inline-flex; color: var(--text-primary);">
+            <svg width="24" height="24" viewBox="0 0 1024 1024">
+                <use xlink:href="#icon-back"></use>
+            </svg>
+        </a>
+    </div>
+
+    <div class="profile-header">
+        <div class="profile-avatar">
+            <img src="{{ url_for('static', filename='uploads/' + profile_user.avatar) }}" alt="Avatar">
+            {% if current_user.id == profile_user.id %}
+            <a href="{{ url_for('edit_profile') }}" class="edit-avatar-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24">
+                    <use xlink:href="#icon-edit"></use>
+                </svg>
+            </a>
+            {% endif %}
+        </div>
+
+        <h1 class="profile-name">{{ profile_user.username }}</h1>
+        <div class="profile-bio">
+            {% if profile_user.bio %}
+                {{ profile_user.bio }}
+            {% else %}
+                <span style="color: var(--text-muted);">Нет информации о себе</span>
+            {% endif %}
+        </div>
+
+        <div class="profile-stats">
+            <div class="stat-item">
+                <div class="stat-value">{{ profile_user.group_memberships|length }}</div>
+                <div class="stat-label">
+                    <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
+                        <use xlink:href="#icon-group"></use>
+                    </svg>
+                    Групп
+                </div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">{{ profile_user.messages_sent|length }}</div>
+                <div class="stat-label">
+                    <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                        <use xlink:href="#icon-chat"></use>
+                    </svg>
+                    Сообщений
+                </div>
+            </div>
+            <div class="stat-item">
+                <div class="stat-value">
+                    <span class="status {{ profile_user.status }}"></span>
+                </div>
+                <div class="stat-label">
+                    {% if profile_user.status == 'online' %}
+                        Онлайн
+                    {% else %}
+                        Был(а) {{ profile_user.last_seen.strftime('%d.%m.%Y %H:%M') }}
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if current_user.id != profile_user.id %}
+        <a href="{{ url_for('start_chat') }}?username={{ profile_user.username }}" class="btn">
+            <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
+                <use xlink:href="#icon-chat"></use>
+            </svg>
+            Написать сообщение
+        </a>
+        {% endif %}
+    </div>
+
+    {% if current_user.id == profile_user.id %}
+    <div class="profile-actions" style="margin-top: 30px;">
+        <a href="{{ url_for('edit_profile') }}" class="btn btn-secondary btn-block">
+            <svg width="20" height="20" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px;">
+                <use xlink:href="#icon-edit"></use>
+            </svg>
+            Редактировать профиль
+        </a>
+    </div>
+    {% endif %}
+
+    <div style="margin-top: 40px;">
+        <h2 style="margin-bottom: 20px; color: var(--text-primary);">
+            <svg width="24" height="24" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 10px;">
+                <use xlink:href="#icon-list"></use>
+            </svg>
+            Группы участника
+        </h2>
+        {% set user_groups = profile_user.group_memberships %}
+        {% if user_groups %}
+            <div class="chats-list" style="background: transparent; padding: 0;">
+                {% for membership in user_groups %}
+                <a href="{{ url_for('group_chat', group_id=membership.group.id) }}" class="chat-item">
+                    <div class="chat-avatar">
+                        <img src="{{ url_for('static', filename='uploads/' + membership.group.icon) }}"
+                             alt="Group"
+                             class="avatar group-avatar"
+                             onerror="this.src='{{ url_for('static', filename='uploads/group_icons/default.png') }}'">
+                    </div>
+                    <div class="chat-info">
+                        <div class="chat-header">
+                            <h3>{{ membership.group.name }}</h3>
+                        </div>
+                        <div class="chat-preview">
+                            <p>{{ membership.group.description[:50] }}{% if membership.group.description|length > 50 %}...{% endif %}</p>
+                            <span class="chat-badge">{{ membership.role }}</span>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 40px; color: var(--text-muted);">
+                <p>Нет групп</p>
+            </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

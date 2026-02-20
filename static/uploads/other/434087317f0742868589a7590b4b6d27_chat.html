@@ -1,0 +1,1534 @@
+{% extends "base.html" %}
+
+{% block title %}Чат с {{ other_user.username if other_user.username else other_user.email.split('@')[0] }} - Мессенджер{% endblock %}
+
+{% block content %}
+<style>
+    /* Основные стили чата */
+    .chat-container {
+        display: flex;
+        flex-direction: column;
+        height: 100vh;
+        background: var(--bg-primary);
+    }
+
+    .chat-header {
+        padding: 15px 20px;
+        background: var(--bg-secondary);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        border-bottom: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .chat-user-info {
+        display: flex;
+        align-items: center;
+        gap: 15px;
+    }
+
+    .chat-avatar {
+        position: relative;
+        width: 45px;
+        height: 45px;
+    }
+
+    .chat-avatar .avatar {
+        width: 45px;
+        height: 45px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--accent);
+    }
+
+    .chat-user-details h2 {
+        font-size: 18px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin-bottom: 4px;
+    }
+
+    .chat-user-details p {
+        font-size: 13px;
+        color: var(--text-secondary);
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .messages-container {
+        flex: 1;
+        padding: 20px;
+        overflow-y: auto;
+        background: #0e1c26;
+        background-image: radial-gradient(circle at 10% 20%, rgba(0, 168, 132, 0.03) 0%, transparent 20%);
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .message {
+        max-width: 65%;
+        clear: both;
+        animation: messageAppear 0.3s ease-out;
+    }
+
+    .message.sent {
+        align-self: flex-end;
+    }
+
+    .message.received {
+        align-self: flex-start;
+    }
+
+    .message-wrapper {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+    }
+
+    .message.sent .message-wrapper {
+        flex-direction: row-reverse;
+    }
+
+    .message-avatar {
+        width: 35px;
+        height: 35px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    .message-bubble {
+        padding: 12px 16px;
+        border-radius: 18px;
+        position: relative;
+        word-wrap: break-word;
+        overflow-wrap: break-word;
+        max-width: 100%;
+    }
+
+    .message.sent .message-bubble {
+        background: var(--sent-message);
+        color: white;
+        border-bottom-right-radius: 4px;
+    }
+
+    .message.received .message-bubble {
+        background: var(--received-message);
+        color: var(--text-primary);
+        border-bottom-left-radius: 4px;
+    }
+
+    .message-content {
+        margin-bottom: 4px;
+        line-height: 1.5;
+    }
+
+    .message-content p {
+        margin: 0;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .message-image {
+        max-width: 300px;
+        max-height: 300px;
+        border-radius: 12px;
+        cursor: pointer;
+        margin-bottom: 5px;
+    }
+
+    .message-meta {
+        display: flex;
+        justify-content: flex-end;
+        align-items: center;
+        gap: 5px;
+        font-size: 11px;
+    }
+
+    .message.sent .message-meta {
+        color: rgba(255, 255, 255, 0.7);
+    }
+
+    .message.received .message-meta {
+        color: var(--text-muted);
+    }
+
+    .read-status {
+        font-size: 12px;
+    }
+
+    .file-message {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 12px;
+        text-decoration: none;
+        color: var(--text-primary);
+        min-width: 250px;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .file-message:hover {
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    .file-icon {
+        font-size: 32px;
+    }
+
+    .file-info {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .file-name {
+        font-weight: 600;
+        margin-bottom: 4px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .file-size {
+        font-size: 11px;
+        color: var(--text-muted);
+    }
+
+    .message-input {
+        padding: 20px;
+        background: var(--bg-secondary);
+        border-top: 1px solid var(--border);
+        flex-shrink: 0;
+    }
+
+    .input-group {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        background: var(--bg-tertiary);
+        border-radius: 24px;
+        padding: 8px 12px;
+    }
+
+    .input-group input[type="text"] {
+        flex: 1;
+        padding: 12px;
+        background: transparent;
+        border: none;
+        color: var(--text-primary);
+        font-size: 15px;
+    }
+
+    .input-group input[type="text"]:focus {
+        outline: none;
+    }
+
+    .input-group button {
+        background: transparent;
+        border: none;
+        color: var(--text-secondary);
+        font-size: 20px;
+        padding: 8px;
+        cursor: pointer;
+        transition: var(--transition);
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+
+    .input-group button:hover {
+        color: var(--accent);
+        background: rgba(255, 255, 255, 0.1);
+    }
+
+    .send-btn {
+        background: var(--accent) !important;
+        color: white !important;
+    }
+
+    .send-btn:hover {
+        background: var(--accent-hover) !important;
+    }
+
+    .file-preview {
+        margin-top: 10px;
+        padding: 12px;
+        background: var(--bg-tertiary);
+        border-radius: var(--radius-md);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .file-preview-info {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .file-preview-remove {
+        color: var(--danger);
+        cursor: pointer;
+        padding: 5px;
+        font-size: 18px;
+    }
+
+    .file-preview-remove:hover {
+        opacity: 0.8;
+    }
+
+    .modal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        z-index: 2000;
+        justify-content: center;
+        align-items: center;
+    }
+
+    .modal.active {
+        display: flex;
+    }
+
+    .modal-content {
+        background: var(--bg-secondary);
+        border-radius: var(--radius-lg);
+        padding: 30px;
+        max-width: 500px;
+        width: 90%;
+        max-height: 90vh;
+        overflow-y: auto;
+        position: relative;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+    }
+
+    .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+    }
+
+    .modal-header h2 {
+        font-size: 20px;
+        font-weight: 600;
+        color: var(--text-primary);
+        margin: 0;
+        display: flex;
+        align-items: center;
+    }
+
+    .close-modal {
+        color: var(--text-secondary);
+        font-size: 28px;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .close-modal:hover {
+        color: var(--danger);
+    }
+
+    @keyframes messageAppear {
+        from {
+            opacity: 0;
+            transform: translateY(10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+
+    @media (max-width: 768px) {
+        .message {
+            max-width: 85%;
+        }
+
+        .file-message {
+            min-width: 200px;
+        }
+
+        .message-image {
+            max-width: 250px;
+        }
+
+        .modal-content {
+            width: 95%;
+            padding: 20px;
+        }
+    }
+
+    @media (max-width: 480px) {
+        .message {
+            max-width: 95%;
+        }
+
+        .chat-header {
+            padding: 10px;
+        }
+
+        .message-input {
+            padding: 10px;
+        }
+
+        .input-group {
+            padding: 5px 10px;
+        }
+
+        .file-message {
+            min-width: 180px;
+        }
+    }
+
+    /* Кнопки действий над сообщением - исправленная версия */
+.message-actions {
+    position: absolute;
+    top: -20px;
+    right: 10px;
+    background: var(--bg-secondary);
+    border-radius: 20px;
+    padding: 5px;
+    display: none;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    z-index: 10;
+    gap: 5px;
+}
+
+.message-bubble:hover .message-actions {
+    display: flex;
+}
+
+.message-action-btn {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    font-size: 16px;
+    padding: 6px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.message-action-btn:hover {
+    background: var(--bg-hover);
+    color: var(--accent);
+}
+
+.message.sent .message-bubble .message-actions {
+    right: 10px;
+    left: auto;
+}
+
+.message.received .message-bubble .message-actions {
+    left: 10px;
+    right: auto;
+}
+
+/* Адаптация для мобильных устройств */
+@media (max-width: 768px) {
+    .message-actions {
+        position: static;
+        margin-top: 10px;
+        justify-content: flex-end;
+        display: flex !important;
+        background: transparent;
+        box-shadow: none;
+        padding: 5px 0;
+    }
+
+    .message-action-btn {
+        background: var(--bg-tertiary);
+        padding: 8px;
+    }
+}
+</style>
+
+<script>
+    // Глобальные переменные
+    let lastMessageId = {{ messages[-1].id if messages else 0 }};
+    let isScrolledUp = false;
+    let scrollPosition = 0;
+    let isSending = false;
+    let sendingMessageId = null;
+    let replyToId = null;
+
+    // Функция экранирования HTML
+    function escapeHtml(unsafe) {
+        if (!unsafe) return '';
+        return unsafe
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#039;')
+            .replace(/\//g, '&#47;')
+            .replace(/=/g, '&#61;');
+    }
+
+    // Прокрутка вниз при загрузке
+    window.onload = function() {
+        const container = document.getElementById('messagesContainer');
+        if (container) container.scrollTop = container.scrollHeight;
+        setTimeout(updateMessages, 1000);
+    };
+
+    // Отслеживание прокрутки
+    const container = document.getElementById('messagesContainer');
+    if (container) {
+        container.addEventListener('scroll', function() {
+            const scrollTop = this.scrollTop;
+            const scrollHeight = this.scrollHeight;
+            const clientHeight = this.clientHeight;
+
+            if (scrollHeight - scrollTop > clientHeight + 100) {
+                isScrolledUp = true;
+                scrollPosition = scrollHeight - scrollTop;
+            } else {
+                isScrolledUp = false;
+            }
+        });
+    }
+
+    // Обновление сообщений
+    function updateMessages() {
+        fetch(`/get_messages/{{ chat.id }}?last_id=${lastMessageId}`)
+            .then(response => response.json())
+            .then(messages => {
+                if (messages.length > 0) {
+                    const container = document.getElementById('messagesContainer');
+                    const wasAtBottom = container.scrollHeight - container.scrollTop <= container.clientHeight + 50;
+
+                    messages.forEach(message => {
+                        addMessageToChat(message);
+                        if (message.id > lastMessageId) {
+                            lastMessageId = message.id;
+                        }
+                    });
+
+                    if (!isScrolledUp || wasAtBottom) {
+                        container.scrollTop = container.scrollHeight;
+                    } else {
+                        container.scrollTop = container.scrollHeight - scrollPosition;
+                    }
+                }
+                setTimeout(updateMessages, 2000);
+            })
+            .catch(error => {
+                console.error('Ошибка обновления:', error);
+                setTimeout(updateMessages, 5000);
+            });
+    }
+
+    // Добавление сообщения в чат
+    function addMessageToChat(message) {
+        if (document.querySelector(`.message[data-message-id="${message.id}"]`)) {
+            return;
+        }
+
+        const container = document.getElementById('messagesContainer');
+        const isSent = message.sender_id == {{ current_user.id }};
+
+        // HTML для ответа на сообщение
+        let replyHtml = '';
+        if (message.reply_to) {
+            let replyContent = '';
+            if (message.reply_to.content) {
+                replyContent = escapeHtml(message.reply_to.content);
+                if (replyContent.length > 50) replyContent = replyContent.substring(0, 50) + '...';
+            } else if (message.reply_to.has_image) {
+                replyContent = '<svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-image"></use></svg> Фото';
+            } else if (message.reply_to.has_file) {
+                replyContent = '<svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-file"></use></svg> ' + escapeHtml(message.reply_to.file_name || 'Файл');
+            }
+
+            replyHtml = `
+                <div class="reply-preview" onclick="scrollToMessage(${message.reply_to.id})">
+                    <div class="reply-sender">${escapeHtml(message.reply_to.sender_name)}</div>
+                    <div class="reply-content">${replyContent}</div>
+                </div>
+            `;
+        }
+
+        // HTML для пересланного сообщения
+        let forwardedHtml = '';
+        if (message.is_forwarded) {
+            forwardedHtml = `
+                <div class="forwarded-header">
+                    <span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
+                            <use xlink:href="#icon-group"></use>
+                        </svg>
+                        Переслано
+                    </span>
+                    ${message.show_forward_sender && message.forwarded_from ?
+                        `<span>от ${escapeHtml(message.forwarded_from.sender_name)}</span>` : ''}
+                </div>
+            `;
+        }
+
+        // HTML для контента сообщения
+        let contentHtml = '';
+        if (message.image_path) {
+            contentHtml = `<img src="${message.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
+        }
+        else if (message.file_path) {
+            let fileIcon = '';
+            if (message.file_icon === 'pdf') {
+                fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-pdf"></use></svg>';
+            } else if (message.file_icon === 'zip') {
+                fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-zip"></use></svg>';
+            } else if (message.file_icon === 'image') {
+                fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-image"></use></svg>';
+            } else {
+                fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-file"></use></svg>';
+            }
+
+            contentHtml = `
+                <div class="file-message" onclick="downloadFile('${message.file_path}', '${escapeHtml(message.file_name)}')">
+                    <span class="file-icon">${fileIcon}</span>
+                    <div class="file-info">
+                        <div class="file-name">${escapeHtml(message.file_name)}</div>
+                        <div class="file-size">${message.file_size || '0 KB'}</div>
+                    </div>
+                    <span style="font-size: 20px;">
+                        <svg width="20" height="20" viewBox="0 0 1024 1024">
+                            <use xlink:href="#icon-attach"></use>
+                        </svg>
+                    </span>
+                </div>`;
+        }
+        else if (message.content) {
+            const escapedText = escapeHtml(message.content);
+            const withBreaks = escapedText.replace(/\n/g, '<br>');
+            contentHtml = `<p style="white-space: pre-wrap; word-break: break-word; margin: 0;">${withBreaks}</p>`;
+        }
+
+        // HTML для аватара отправителя
+        const senderAvatar = isSent ? '' : `
+            <img src="${message.sender_avatar || '/static/uploads/avatars/default.png'}"
+                 alt="Avatar"
+                 class="message-avatar"
+                 onerror="this.src='/static/uploads/avatars/default.png'"
+                 onclick="window.location.href='/profile/${message.sender_id}'"
+                 style="cursor: pointer;">`;
+
+        // HTML для статуса прочтения
+        const readStatus = isSent ? `
+            <span class="read-status" title="${message.is_read ? 'Прочитано' : 'Отправлено'}">
+                ${message.is_read ?
+                    '<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-eye"></use></svg>' :
+                    '<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>'}
+            </span>` : '';
+
+        // Полный HTML сообщения
+        const messageHtml = `
+            <div class="message ${isSent ? 'sent' : 'received'}" data-message-id="${message.id}">
+                <div class="message-wrapper">
+                    ${senderAvatar}
+                    <div class="message-bubble">
+                        ${replyHtml}
+                        ${forwardedHtml}
+                        <div class="message-content">
+                            ${contentHtml}
+                        </div>
+                        <div class="message-meta">
+                            <span>${message.timestamp}</span>
+                            ${message.is_edited ? '<span>отредактировано</span>' : ''}
+                            ${readStatus}
+                        </div>
+                        <div class="message-actions">
+                            <button class="message-action-btn" onclick="replyToMessage(${message.id})" title="Ответить">
+                                <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                    <use xlink:href="#icon-back"></use>
+                                </svg>
+                            </button>
+                            <button class="message-action-btn" onclick="forwardMessage(${message.id})" title="Переслать">
+                                <svg width="20" height="20" viewBox="0 0 24 24">
+                                    <use xlink:href="#icon-group"></use>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
+        container.insertAdjacentHTML('beforeend', messageHtml);
+    }
+
+    // Функция отправки сообщения с индикацией
+    function sendMessage() {
+        const form = document.getElementById('messageForm');
+        const formData = new FormData(form);
+        const input = document.getElementById('messageInput');
+        const fileInput = document.getElementById('fileInput');
+        const sendButton = document.querySelector('.send-btn');
+
+        if (!input.value.trim() && fileInput.files.length === 0) {
+            return;
+        }
+
+        // Защита от множественных отправок
+        if (isSending) {
+            showNotification('Сообщение уже отправляется...', 'info');
+            return;
+        }
+
+        if (replyToId) {
+            formData.append('reply_to_id', replyToId);
+        }
+
+        const messageText = input.value;
+        const hasFile = fileInput.files.length > 0;
+
+        // Показываем индикатор отправки
+        isSending = true;
+        sendButton.disabled = true;
+        sendButton.style.opacity = '0.5';
+        sendButton.style.pointerEvents = 'none';
+        sendButton.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 1024 1024" class="spinning">
+                <use xlink:href="#icon-loading"></use>
+            </svg>
+        `;
+
+        // Временно очищаем поле ввода
+        input.value = '';
+
+        // Показываем временное сообщение в чате
+        const tempMessageId = 'temp_' + Date.now();
+        const tempMessageHtml = `
+            <div class="message sent sending" data-message-id="${tempMessageId}">
+                <div class="message-wrapper">
+                    <div class="message-bubble">
+                        <div class="message-content">
+                            ${hasFile ?
+                                '<div class="file-message sending"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">' + escapeHtml(fileInput.files[0].name) + '</div><div class="file-size">Отправка...</div></div></div>' :
+                                '<p style="white-space: pre-wrap; word-break: break-word; margin: 0;">' + escapeHtml(messageText) + '</p>'}
+                        </div>
+                        <div class="message-meta">
+                            <span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                            <span class="read-status">
+                                <svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning">
+                                    <use xlink:href="#icon-loading"></use>
+                                </svg>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+
+        const container = document.getElementById('messagesContainer');
+        container.insertAdjacentHTML('beforeend', tempMessageHtml);
+        sendingMessageId = tempMessageId;
+
+        // Прокручиваем вниз
+        container.scrollTop = container.scrollHeight;
+
+        fetch('/send_message', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                // Удаляем временное сообщение
+                const tempMessage = document.querySelector(`.message[data-message-id="${tempMessageId}"]`);
+                if (tempMessage) {
+                    tempMessage.remove();
+                }
+
+                // Добавляем реальное сообщение
+                const realMessage = createRealMessage(data, messageText, fileInput.files[0]);
+                container.insertAdjacentHTML('beforeend', realMessage);
+
+                clearFile();
+                cancelReply();
+                input.focus();
+            } else {
+                // Восстанавливаем сообщение при ошибке
+                restoreFailedMessage(tempMessageId, messageText, data.error || 'Ошибка отправки');
+            }
+        })
+        .catch(error => {
+            console.error('Ошибка отправки:', error);
+            restoreFailedMessage(tempMessageId, messageText, 'Ошибка соединения');
+        })
+        .finally(() => {
+            // Скрываем индикатор отправки
+            isSending = false;
+            sendButton.disabled = false;
+            sendButton.style.opacity = '1';
+            sendButton.style.pointerEvents = 'auto';
+            sendButton.innerHTML = `
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-send"></use>
+                </svg>
+            `;
+        });
+    }
+
+   // Функция создания реального сообщения
+function createRealMessage(data, messageText, file) {
+    const timestamp = data.timestamp || new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+    let contentHtml = '';
+    
+    // 🔥 ПРОВЕРЯЕМ ТИП КОНТЕНТА ИЗ ОТВЕТА СЕРВЕРА
+    if (data.image_path) {
+        // Это изображение - показываем как картинку
+        contentHtml = `
+            <img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">
+        `;
+    }
+    else if (data.file_path) {
+        // Это файл - определяем иконку по типу
+        let fileIcon = '';
+        const fileName = data.file_name || (file ? file.name : 'Файл');
+        const ext = fileName.split('.').pop().toLowerCase();
+        
+        if (data.file_category === 'image' || ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
+            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-image"></use></svg>';
+        } else if (ext === 'pdf' || data.file_icon === '📄') {
+            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-pdf"></use></svg>';
+        } else if (ext === 'zip' || ext === 'rar' || ext === '7z' || data.file_icon === '📦') {
+            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-zip"></use></svg>';
+        } else {
+            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-file"></use></svg>';
+        }
+        
+        contentHtml = `
+            <div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')">
+                <span class="file-icon">${fileIcon}</span>
+                <div class="file-info">
+                    <div class="file-name">${escapeHtml(fileName)}</div>
+                    <div class="file-size">${data.file_size || (file ? (file.size / 1024).toFixed(1) + ' KB' : '0 KB')}</div>
+                </div>
+                <span style="font-size: 20px;">
+                    <svg width="20" height="20" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-attach"></use>
+                    </svg>
+                </span>
+            </div>
+        `;
+    }
+    else if (data.content) {
+        // Это текст
+        const escapedText = escapeHtml(data.content);
+        const withBreaks = escapedText.replace(/\n/g, '<br>');
+        contentHtml = `<p style="white-space: pre-wrap; word-break: break-word; margin: 0;">${withBreaks}</p>`;
+    }
+    
+    return `
+        <div class="message sent" data-message-id="${data.message_id}">
+            <div class="message-wrapper">
+                <div class="message-bubble">
+                    <div class="message-content">
+                        ${contentHtml}
+                    </div>
+                    <div class="message-meta">
+                        <span>${timestamp}</span>
+                        <span class="read-status" title="Отправлено">
+                            <svg width="16" height="16" viewBox="0 0 1024 1024">
+                                <use xlink:href="#icon-check"></use>
+                            </svg>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+}
+
+    // Функция восстановления при ошибке
+    function restoreFailedMessage(tempMessageId, messageText, error) {
+        const tempMessage = document.querySelector(`.message[data-message-id="${tempMessageId}"]`);
+        if (tempMessage) {
+            tempMessage.classList.add('failed');
+            const meta = tempMessage.querySelector('.message-meta');
+            meta.innerHTML = `
+                <span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                <span class="read-status" style="color: var(--danger);" title="${error}">
+                    <svg width="16" height="16" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-error"></use>
+                    </svg>
+                </span>
+            `;
+
+            // Добавляем кнопку повторной отправки
+            const bubble = tempMessage.querySelector('.message-bubble');
+            bubble.innerHTML += `
+                <div class="message-actions" style="display: flex; justify-content: flex-end; gap: 5px; margin-top: 5px;">
+                    <button class="message-action-btn" onclick="retrySendMessage(this)" style="color: var(--accent);" title="Повторить отправку">
+                        <svg width="20" height="20" viewBox="0 0 1024 1024">
+                            <use xlink:href="#icon-refresh"></use>
+                        </svg>
+                    </button>
+                </div>
+            `;
+        }
+    }
+
+    // Функция повторной отправки
+    function retrySendMessage(button) {
+        const messageDiv = button.closest('.message');
+        if (messageDiv) {
+            const messageText = messageDiv.querySelector('.message-content p')?.textContent || '';
+            messageDiv.remove();
+            document.getElementById('messageInput').value = messageText;
+            sendMessage();
+        }
+    }
+
+    // Обработка выбора файла
+    function handleFileSelect() {
+        const fileInput = document.getElementById('fileInput');
+        const filePreview = document.getElementById('filePreview');
+        const fileName = document.getElementById('fileName');
+        const fileSize = document.getElementById('fileSize');
+
+        if (fileInput.files.length > 0) {
+            const file = fileInput.files[0];
+            fileName.textContent = escapeHtml(file.name);
+            fileSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
+            filePreview.style.display = 'flex';
+        }
+    }
+
+    // Очистка выбранного файла
+    function clearFile() {
+        document.getElementById('fileInput').value = '';
+        document.getElementById('filePreview').style.display = 'none';
+    }
+
+    // Скачивание файла
+    function downloadFile(filePath, fileName) {
+        const link = document.createElement('a');
+        link.href = filePath;
+        link.download = fileName;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    // Открытие модального окна с изображением
+    function openImageModal(src) {
+        const modal = document.getElementById('imageModal');
+        const modalImg = document.getElementById('modalImage');
+        if (modal && modalImg) {
+            modal.classList.add('active');
+            modalImg.src = src;
+            document.body.style.overflow = 'hidden';
+        }
+    }
+
+    // Закрытие модального окна с изображением
+    function closeImageModal() {
+        const modal = document.getElementById('imageModal');
+        if (modal) modal.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    // Ответ на сообщение
+    function replyToMessage(messageId) {
+        const messageInput = document.getElementById('messageInput');
+        messageInput.focus();
+        replyToId = messageId;
+
+        const indicator = document.getElementById('replyIndicator');
+        indicator.style.display = 'flex';
+        indicator.innerHTML = `
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
+                <span>
+                    <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
+                        <use xlink:href="#icon-back"></use>
+                    </svg>
+                    Ответ на сообщение
+                </span>
+                <span style="color: var(--text-secondary); font-size: 12px;">Нажмите ESC для отмены</span>
+            </div>
+            <span onclick="cancelReply()" style="cursor: pointer; color: var(--danger);">
+                <svg width="18" height="18" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-delete"></use>
+                </svg>
+            </span>
+        `;
+    }
+
+    // Отмена ответа на сообщение
+    function cancelReply() {
+        const indicator = document.getElementById('replyIndicator');
+        indicator.style.display = 'none';
+        replyToId = null;
+        document.getElementById('messageInput').placeholder = 'Введите сообщение...';
+    }
+
+    // Пересылка сообщения
+    function forwardMessage(messageId) {
+        window.forwardMessageId = messageId;
+        showForwardModal(messageId);
+    }
+
+    // Показать модальное окно пересылки
+    function showForwardModal(messageId) {
+        const modal = document.createElement('div');
+        modal.className = 'modal active';
+        modal.id = 'forwardModal';
+        modal.innerHTML = `
+            <div class="modal-content" style="max-width: 500px;">
+                <div class="modal-header">
+                    <h2>
+                        <svg width="24" height="24" viewBox="0 0 24 24" style="margin-right: 10px;">
+                            <use xlink:href="#icon-group"></use>
+                        </svg>
+                        Переслать сообщение
+                    </h2>
+                    <span class="close-modal" onclick="closeForwardModal()">&times;</span>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <label style="display: flex; align-items: center; gap: 10px; color: var(--text-primary);">
+                        <input type="checkbox" id="showSenderCheckbox" checked>
+                        Показать, кто отправил
+                    </label>
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; background: var(--bg-tertiary); border-radius: 12px; padding: 12px;">
+                        <svg width="20" height="20" viewBox="0 0 1024 1024">
+                            <use xlink:href="#icon-search"></use>
+                        </svg>
+                        <input type="text"
+                               id="forwardSearchInput"
+                               placeholder="Поиск чата или группы..."
+                               style="width: 100%; background: transparent; border: none; color: var(--text-primary); font-size: 15px;">
+                    </div>
+                </div>
+                <div id="forwardTargetsList" style="max-height: 400px; overflow-y: auto; margin-bottom: 20px;">
+                    Загрузка...
+                </div>
+                <div style="margin-bottom: 20px;">
+                    <textarea id="forwardAdditionalText"
+                              placeholder="Добавить текст к пересылаемому сообщению (необязательно)"
+                              style="width: 100%; padding: 12px; background: var(--bg-tertiary); border: 1px solid var(--border); border-radius: 12px; color: var(--text-primary); min-height: 80px;"></textarea>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button class="btn btn-secondary" style="flex: 1;" onclick="closeForwardModal()">Отмена</button>
+                </div>
+            </div>
+        `;
+
+        document.body.appendChild(modal);
+        loadForwardTargets();
+
+        setTimeout(() => {
+            const searchInput = document.getElementById('forwardSearchInput');
+            if (searchInput) {
+                searchInput.addEventListener('input', filterForwardTargets);
+            }
+        }, 100);
+    }
+
+    // Загрузка списка чатов и групп для пересылки
+    function loadForwardTargets() {
+        fetch('/get_chats_and_groups_for_forward')
+            .then(response => response.json())
+            .then(targets => {
+                const container = document.getElementById('forwardTargetsList');
+                window.forwardTargets = targets;
+
+                let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+                targets.forEach(target => {
+                    html += `
+                        <div class="forward-target-item"
+                             onclick="selectForwardTarget('${target.type}', ${target.id}, '${escapeHtml(target.name)}')"
+                             style="display: flex; align-items: center; padding: 12px; background: var(--bg-tertiary); border-radius: 12px; cursor: pointer; transition: var(--transition);">
+                            <img src="${target.avatar}"
+                                 onerror="this.src='${target.type === 'group' ? '/static/uploads/group_icons/default.png' : '/static/uploads/avatars/default.png'}'"
+                                 style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px;">
+                            <div style="flex: 1;">
+                                <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(target.name)}</div>
+                                <div style="font-size: 12px; color: var(--text-secondary);">
+                                    ${target.type === 'group' ?
+                                        '<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-group"></use></svg> ' + (target.members_count || 0) + ' участников' :
+                                        '<svg width="14" height="14" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-chat"></use></svg> Личный чат'}
+                                </div>
+                            </div>
+                            <svg width="20" height="20" viewBox="0 0 1024 1024" style="color: var(--accent);">
+                                <use xlink:href="#icon-arrow-right"></use>
+                            </svg>
+                        </div>
+                    `;
+                });
+                html += '</div>';
+                container.innerHTML = html;
+            });
+    }
+
+    // Фильтрация целей для пересылки
+    function filterForwardTargets() {
+        const query = document.getElementById('forwardSearchInput').value.toLowerCase();
+        const container = document.getElementById('forwardTargetsList');
+        const targets = window.forwardTargets || [];
+
+        const filtered = targets.filter(t => t.name.toLowerCase().includes(query));
+
+        let html = '<div style="display: flex; flex-direction: column; gap: 8px;">';
+        filtered.forEach(target => {
+            html += `
+                <div class="forward-target-item"
+                     onclick="selectForwardTarget('${target.type}', ${target.id}, '${escapeHtml(target.name)}')"
+                     style="display: flex; align-items: center; padding: 12px; background: var(--bg-tertiary); border-radius: 12px; cursor: pointer; transition: var(--transition);">
+                    <img src="${target.avatar}"
+                         onerror="this.src='${target.type === 'group' ? '/static/uploads/group_icons/default.png' : '/static/uploads/avatars/default.png'}'"
+                         style="width: 40px; height: 40px; border-radius: 50%; object-fit: cover; margin-right: 12px;">
+                    <div style="flex: 1;">
+                        <div style="font-weight: 600; color: var(--text-primary);">${escapeHtml(target.name)}</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">
+                            ${target.type === 'group' ?
+                                '<svg width="14" height="14" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-group"></use></svg> ' + (target.members_count || 0) + ' участников' :
+                                '<svg width="14" height="14" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-chat"></use></svg> Личный чат'}
+                        </div>
+                    </div>
+                    <svg width="20" height="20" viewBox="0 0 1024 1024" style="color: var(--accent);">
+                        <use xlink:href="#icon-arrow-right"></use>
+                    </svg>
+                </div>
+            `;
+        });
+        html += '</div>';
+        container.innerHTML = html;
+    }
+
+    // Выбор цели для пересылки
+    function selectForwardTarget(type, id, name) {
+        const showSender = document.getElementById('showSenderCheckbox').checked;
+        const additionalText = document.getElementById('forwardAdditionalText').value;
+
+        const formData = new FormData();
+        formData.append('message_id', window.forwardMessageId);
+        formData.append('target_type', type);
+        formData.append('target_id', id);
+        formData.append('show_sender', showSender);
+        formData.append('additional_text', additionalText);
+
+        fetch('/forward_message', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                closeForwardModal();
+                showNotification(`Сообщение переслано в ${name}`, 'success');
+            } else {
+                alert(data.error || 'Ошибка при пересылке сообщения');
+            }
+        });
+    }
+
+    // Закрыть модальное окно пересылки
+    function closeForwardModal() {
+        const modal = document.getElementById('forwardModal');
+        if (modal) modal.remove();
+        window.forwardMessageId = null;
+    }
+
+    // Прокрутка к сообщению
+    function scrollToMessage(messageId) {
+        const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
+        if (messageElement) {
+            messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            messageElement.style.animation = 'highlight 2s ease';
+            setTimeout(() => {
+                messageElement.style.animation = '';
+            }, 2000);
+        }
+    }
+
+    // Показать уведомление
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        notification.className = `notification ${type}`;
+        notification.textContent = message;
+        notification.style.cssText = `
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            padding: 15px 20px;
+            border-radius: 10px;
+            color: white;
+            z-index: 9999;
+            animation: slideIn 0.3s ease;
+            background: ${type === 'success' ? 'linear-gradient(135deg, #2ed573 0%, #1abc9c 100%)' : (type === 'info' ? 'linear-gradient(135deg, #3498db 0%, #2980b9 100%)' : 'linear-gradient(135deg, #ff4757 0%, #ff3838 100%)')};
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => notification.remove(), 300);
+        }, 3000);
+    }
+
+    // Закрытие модальных окон по ESC
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            closeImageModal();
+            if (replyToId) cancelReply();
+            const forwardModal = document.getElementById('forwardModal');
+            if (forwardModal) forwardModal.remove();
+        }
+    });
+
+    // Закрытие модальных окон по клику на оверлей
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('active');
+            }
+        });
+    });
+
+    // Добавляем CSS стили для индикации
+    const style = document.createElement('style');
+    style.textContent = `
+        .message.sending {
+            opacity: 0.7;
+        }
+
+        .message.sending .message-bubble {
+            background: var(--sent-message);
+            filter: brightness(0.8);
+        }
+
+        .message.failed .message-bubble {
+            background: var(--danger);
+            opacity: 0.8;
+        }
+
+        .spinning {
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            from {
+                transform: rotate(0deg);
+            }
+            to {
+                transform: rotate(360deg);
+            }
+        }
+
+        .send-btn:disabled {
+            cursor: not-allowed;
+        }
+
+        .file-message.sending {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .notification {
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+</script>
+
+
+<div class="chat-container">
+    <!-- Шапка чата -->
+    <header class="chat-header">
+        <div class="chat-user-info">
+            <a href="{{ url_for('chats') }}" class="btn-icon" style="background: var(--bg-tertiary); color: var(--text-primary);">
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-back"></use>
+                </svg>
+            </a>
+            <div class="chat-avatar" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" style="cursor: pointer;">
+                <img src="{{ url_for('static', filename='uploads/' + (other_user.avatar if other_user.avatar else 'avatars/default.png')) }}"
+                     alt="Avatar"
+                     class="avatar"
+                     onerror="this.src='{{ url_for('static', filename='uploads/avatars/default.png') }}'">
+                <span class="status {{ other_user.status if other_user.status else 'offline' }}"
+                      style="position: absolute; bottom: 0; right: 0; width: 12px; height: 12px;"></span>
+            </div>
+            <div class="chat-user-details" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" style="cursor: pointer;">
+                <h2>{{ other_user.username if other_user.username else other_user.email.split('@')[0] }}</h2>
+                <p>
+                    {% if other_user.status == 'online' %}
+                        <span class="status online"></span> Онлайн
+                    {% else %}
+                        <span class="status offline"></span> Был(а) {{ other_user.last_seen.strftime('%H:%M %d.%m.%Y') if other_user.last_seen else 'давно' }}
+                    {% endif %}
+                </p>
+            </div>
+        </div>
+        <div class="chat-actions" style="display: flex; gap: 10px;">
+            <button class="btn-icon" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" title="Профиль">
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-profile"></use>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Контейнер сообщений -->
+    <main class="messages-container" id="messagesContainer">
+        {% if messages %}
+            {% for message in messages %}
+            <div class="message {% if message.sender_id == current_user.id %}sent{% else %}received{% endif %}"
+                 data-message-id="{{ message.id }}">
+                <div class="message-wrapper">
+                    {% if message.sender_id != current_user.id %}
+                    <img src="{{ url_for('static', filename='uploads/' + (message.sender.avatar if message.sender and message.sender.avatar else 'avatars/default.png')) }}"
+                         alt="Avatar"
+                         class="message-avatar"
+                         onclick="window.location.href='{{ url_for('profile', user_id=message.sender_id) }}'"
+                         style="cursor: pointer;">
+                    {% endif %}
+                    <div class="message-bubble">
+                        <!-- Блок ответа на сообщение -->
+                        {% if message.reply_to %}
+                        <div class="reply-preview" onclick="scrollToMessage({{ message.reply_to.id }})">
+                            <div class="reply-sender">{{ message.reply_to.sender.username if message.reply_to.sender else 'Пользователь' }}</div>
+                            <div class="reply-content">
+                                {% if message.reply_to.content %}
+                                    {{ message.reply_to.content[:50] }}{% if message.reply_to.content|length > 50 %}...{% endif %}
+                                {% elif message.reply_to.image_path %}
+                                    <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                                        <use xlink:href="#icon-image"></use>
+                                    </svg>
+                                    Фото
+                                {% elif message.reply_to.file_path %}
+                                    <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
+                                        <use xlink:href="#icon-file"></use>
+                                    </svg>
+                                    {{ message.reply_to.file_name if message.reply_to.file_name else 'Файл' }}
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Блок пересланного сообщения -->
+                        {% if message.is_forwarded %}
+                        <div class="forwarded-header">
+                            <span>
+                                <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
+                                    <use xlink:href="#icon-group"></use>
+                                </svg>
+                                Переслано
+                            </span>
+                            {% if message.show_forward_sender and message.forwarded_from %}
+                                <span>от {{ message.forwarded_from.sender.username if message.forwarded_from.sender else 'Пользователя' }}</span>
+                            {% endif %}
+                        </div>
+                        {% endif %}
+
+                        <!-- Контент сообщения -->
+                        <div class="message-content">
+                            {% if message.image_path %}
+                            <img src="{{ url_for('static', filename='uploads/' + message.image_path) }}"
+                                 alt="Изображение"
+                                 class="message-image"
+                                 onclick="openImageModal(this.src)">
+                            {% elif message.file_path %}
+                            <div class="file-message" onclick="downloadFile('{{ url_for('download_file', filepath=message.file_path) }}', '{{ message.file_name }}')">
+                                <span class="file-icon">
+                                    {% set ext = message.file_name.split('.')[-1].lower() if message.file_name else '' %}
+                                    {% if ext in ['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'] %}
+                                        <svg width="32" height="32" viewBox="0 0 1024 1024">
+                                            <use xlink:href="#icon-image"></use>
+                                        </svg>
+                                    {% elif ext == 'pdf' %}
+                                        <svg width="32" height="32" viewBox="0 0 1024 1024">
+                                            <use xlink:href="#icon-pdf"></use>
+                                        </svg>
+                                    {% elif ext in ['zip', 'rar', '7z', 'tar', 'gz'] %}
+                                        <svg width="32" height="32" viewBox="0 0 1024 1024">
+                                            <use xlink:href="#icon-zip"></use>
+                                        </svg>
+                                    {% else %}
+                                        <svg width="32" height="32" viewBox="0 0 1024 1024">
+                                            <use xlink:href="#icon-file"></use>
+                                        </svg>
+                                    {% endif %}
+                                </span>
+                                <div class="file-info">
+                                    <div class="file-name">{{ message.file_name }}</div>
+                                    <div class="file-size">{{ (message.file_size / 1024)|round(1) if message.file_size else 0 }} KB</div>
+                                </div>
+                                <span style="font-size: 20px;">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-attach"></use>
+                                    </svg>
+                                </span>
+                            </div>
+                            {% elif message.content %}
+                                <p style="white-space: pre-wrap; word-break: break-word; margin: 0;">{{ message.content }}</p>
+                            {% endif %}
+                        </div>
+
+                        <!-- Мета-информация сообщения -->
+                        <div class="message-meta">
+                            <span>{{ message.timestamp.strftime('%H:%M') }}</span>
+                            {% if message.is_edited %}
+                            <span>отредактировано</span>
+                            {% endif %}
+                            {% if message.sender_id == current_user.id %}
+                                {% if message.is_read %}
+                                <span class="read-status" title="Прочитано">
+                                    <svg width="16" height="16" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-eye"></use>
+                                    </svg>
+                                </span>
+                                {% else %}
+                                <span class="read-status" title="Отправлено">
+                                    <svg width="16" height="16" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-check"></use>
+                                    </svg>
+                                </span>
+                                {% endif %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Кнопки действий над сообщением -->
+                        <div class="message-actions">
+                            <button class="message-action-btn" onclick="replyToMessage({{ message.id }})" title="Ответить">
+                                <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                    <use xlink:href="#icon-back"></use>
+                                </svg>
+                            </button>
+                            <button class="message-action-btn" onclick="forwardMessage({{ message.id }})" title="Переслать">
+                                <svg width="20" height="20" viewBox="0 0 24 24">
+                                    <use xlink:href="#icon-group"></use>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            {% endfor %}
+        {% else %}
+        <div style="text-align: center; padding: 50px 20px; color: var(--text-muted);">
+            <span style="font-size: 48px; display: block; margin-bottom: 15px;">
+                <svg width="64" height="64" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-chat"></use>
+                </svg>
+            </span>
+            <h3 style="margin-bottom: 10px;">Нет сообщений</h3>
+            <p>Напишите первое сообщение</p>
+        </div>
+        {% endif %}
+    </main>
+
+    <!-- Форма отправки сообщения -->
+    <footer class="message-input">
+        <form id="messageForm" enctype="multipart/form-data">
+            <input type="hidden" name="chat_id" value="{{ chat.id }}">
+
+            <div class="input-group">
+                <button type="button" onclick="document.getElementById('fileInput').click()" title="Прикрепить файл">
+                    <svg width="24" height="24" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-attach"></use>
+                    </svg>
+                </button>
+
+                <input type="file" id="fileInput" name="file" style="display: none;" onchange="handleFileSelect()">
+
+                <input type="text"
+                       name="content"
+                       id="messageInput"
+                       placeholder="Введите сообщение..."
+                       autocomplete="off"
+                       onkeypress="if(event.keyCode === 13 && !event.shiftKey) {event.preventDefault(); sendMessage();}">
+
+                <button type="button" class="send-btn" onclick="sendMessage()" title="Отправить">
+                    <svg width="24" height="24" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-send"></use>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Индикатор ответа на сообщение -->
+            <div id="replyIndicator" class="reply-indicator" style="display: none;"></div>
+
+            <!-- Превью выбранного файла -->
+            <div id="filePreview" class="file-preview" style="display: none;">
+                <div class="file-preview-info">
+                    <span class="file-icon">
+                        <svg width="24" height="24" viewBox="0 0 1024 1024">
+                            <use xlink:href="#icon-file"></use>
+                        </svg>
+                    </span>
+                    <div>
+                        <div id="fileName"></div>
+                        <div id="fileSize" class="file-size"></div>
+                    </div>
+                </div>
+                <span class="file-preview-remove" onclick="clearFile()">
+                    <svg width="18" height="18" viewBox="0 0 1024 1024" style="color: var(--danger);">
+                        <use xlink:href="#icon-delete"></use>
+                    </svg>
+                </span>
+            </div>
+        </form>
+    </footer>
+</div>
+
+<!-- Модальное окно для просмотра изображений -->
+<div class="modal" id="imageModal">
+    <div class="modal-content" style="background: transparent; box-shadow: none; max-width: 90%; padding: 0;">
+        <span class="close-modal" onclick="closeImageModal()" style="position: fixed; top: 20px; right: 30px; color: white; font-size: 40px;">&times;</span>
+        <img id="modalImage" style="max-width: 100%; max-height: 90vh; object-fit: contain; border-radius: 8px;">
+    </div>
+</div>
+
+<!-- SVG иконки -->
+<svg style="display: none;">
+    <symbol id="icon-loading" viewBox="0 0 1024 1024">
+        <path d="M512 1024c-136.8 0-265-53.2-361.4-149.8S0 648.8 0 512s53.2-265 149.8-361.4S375.2 0 512 0c132.8 0 257.4 49.4 353.8 140.2 9.8 9.2 10.2 24.8 1 34.6-9.2 9.8-24.8 10.2-34.6 1C742.4 90.4 630.6 46 512 46 286.8 46 104 228.8 104 454s182.8 408 408 408 408-182.8 408-408c0-19.2-1.4-38.4-4-57.2-1.6-11.6 6.4-22.4 18-24 11.6-1.6 22.4 6.4 24 18 3 21.4 4.4 43 4 64.6 0.2 136.8-53 265.2-149.6 361.6S648.8 1024 512 1024z"/>
+    </symbol>
+    <symbol id="icon-error" viewBox="0 0 1024 1024">
+        <path d="M512 0C229.2 0 0 229.2 0 512s229.2 512 512 512 512-229.2 512-512S794.8 0 512 0z m0 938.7C276.8 938.7 85.3 747.2 85.3 512S276.8 85.3 512 85.3 938.7 276.8 938.7 512 747.2 938.7 512 938.7z M682.7 341.3c-11.8 0-22 4.6-30 12.6L512 494.6 371.3 354c-8-8-18.2-12.6-30-12.6-11.8 0-22 4.6-30 12.6-8 8-12.6 18.2-12.6 30 0 11.8 4.6 22 12.6 30L452 554 311.3 694.6c-8 8-12.6 18.2-12.6 30 0 11.8 4.6 22 12.6 30 8 8 18.2 12.6 30 12.6 11.8 0 22-4.6 30-12.6L512 613.4l140.6 140.6c8 8 18.2 12.6 30 12.6 11.8 0 22-4.6 30-12.6 8-8 12.6-18.2 12.6-30 0-11.8-4.6-22-12.6-30L572 554l140.6-140.6c8-8 12.6-18.2 12.6-30 0-11.8-4.6-22-12.6-30-8-8-18.2-12.6-30-12.6z"/>
+    </symbol>
+    <symbol id="icon-refresh" viewBox="0 0 1024 1024">
+        <path d="M960 512c0 119.6-46.6 232-131.2 316.6S711.6 960 592 960c-119.6 0-232-46.6-316.6-131.2S144 711.6 144 592c0-19.6 16-35.6 35.6-35.6s35.6 16 35.6 35.6c0 98.8 38.4 191.6 108.2 261.4 69.8 69.8 162.6 108.2 261.4 108.2 98.8 0 191.6-38.4 261.4-108.2 69.8-69.8 108.2-162.6 108.2-261.4 0-98.8-38.4-191.6-108.2-261.4-69.8-69.8-162.6-108.2-261.4-108.2-74.6 0-146.2 22.2-207.4 63.8l44 44c8 8 12.6 18.2 12.6 30 0 11.8-4.6 22-12.6 30-8 8-18.2 12.6-30 12.6H179.6c-11.8 0-22-4.6-30-12.6-8-8-12.6-18.2-12.6-30V234.8c0-11.8 4.6-22 12.6-30 8-8 18.2-12.6 30-12.6 11.8 0 22 4.6 30 12.6l51.6 51.6C336.2 183.2 429.2 148 528 148c119.6 0 232 46.6 316.6 131.2S960 392.4 960 512z"/>
+    </symbol>
+</svg>
+
+{% endblock %}

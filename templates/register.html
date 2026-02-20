@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+
+{% block title %}Регистрация - Мессенджер{% endblock %}
+
+{% block content %}
+<div class="auth-wrapper">
+    <div class="auth-container">
+        <div class="logo">
+            <div class="logo-icon">
+                <svg width="64" height="64" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-profile"></use>
+                </svg>
+            </div>
+            <h1>Создать аккаунт</h1>
+        </div>
+
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
+
+        <form method="POST" action="{{ url_for('register') }}">
+            <div class="form-group">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" placeholder="Например: john_doe" required>
+            </div>
+
+            <div class="form-group">
+                <label>Email</label>
+                <input type="email" name="email" placeholder="example@email.com" required>
+            </div>
+
+            <div class="form-group">
+                <label>Пароль</label>
+                <input type="password" name="password" placeholder="Минимум 6 символов" required>
+            </div>
+
+            <button type="submit" class="btn btn-block">
+                <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
+                    <use xlink:href="#icon-check"></use>
+                </svg>
+                Зарегистрироваться
+            </button>
+        </form>
+
+        <div class="auth-link">
+            Уже есть аккаунт?
+            <a href="{{ url_for('login') }}">Войти</a>
+        </div>
+    </div>
+</div>
+{% endblock %}

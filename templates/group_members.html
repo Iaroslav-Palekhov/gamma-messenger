@@ -1,0 +1,260 @@
+{% extends "base.html" %}
+
+{% block title %}Участники {{ group.name }} - Мессенджер{% endblock %}
+
+{% block content %}
+<div class="app-container">
+    <div class="sidebar" style="width: 100%; max-width: 600px; margin: 0 auto; border-right: none;">
+        <div class="header">
+            <div class="user-info">
+                <a href="{{ url_for('group_chat', group_id=group.id) }}" class="btn-icon" style="background: var(--bg-tertiary); margin-right: 10px;">
+                    <svg width="24" height="24" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-back"></use>
+                    </svg>
+                </a>
+                <img src="{{ url_for('static', filename='uploads/' + group.icon) }}"
+                     alt="Group"
+                     class="avatar"
+                     onerror="this.src='{{ url_for('static', filename='uploads/group_icons/default.png') }}'">
+                <div class="user-details">
+                    <h3>{{ group.name }}</h3>
+                    <p>
+                        <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
+                            <use xlink:href="#icon-group"></use>
+                        </svg>
+                        {{ group.members|length }} участников
+                    </p>
+                </div>
+            </div>
+            {% if current_membership.role in ['owner', 'admin'] %}
+            <button class="btn btn-secondary btn-sm" onclick="showAddMemberModal()">
+                <svg width="18" height="18" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
+                    <use xlink:href="#icon-group"></use>
+                </svg>
+                Добавить
+            </button>
+            {% endif %}
+        </div>
+
+        <div style="padding: 20px;">
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: var(--text-primary); margin-bottom: 15px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px;">
+                        <use xlink:href="#icon-profile"></use>
+                    </svg>
+                    Владелец
+                </h3>
+                {% for member in members if member.role == 'owner' %}
+                <div class="member-item">
+                    <img src="{{ url_for('static', filename='uploads/' + member.user.avatar) }}"
+                         alt="Avatar"
+                         class="member-avatar"
+                         onclick="window.location.href='{{ url_for('profile', user_id=member.user.id) }}'"
+                         style="cursor: pointer;">
+                    <div class="member-info">
+                        <div class="member-name">{{ member.user.username }}</div>
+                        <span class="member-role owner">Владелец</span>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: var(--text-primary); margin-bottom: 15px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px;">
+                        <use xlink:href="#icon-edit"></use>
+                    </svg>
+                    Администраторы
+                </h3>
+                {% set has_admins = false %}
+                {% for member in members if member.role == 'admin' %}
+                    {% set has_admins = true %}
+                    <div class="member-item">
+                        <img src="{{ url_for('static', filename='uploads/' + member.user.avatar) }}"
+                             alt="Avatar"
+                             class="member-avatar"
+                             onclick="window.location.href='{{ url_for('profile', user_id=member.user.id) }}'"
+                             style="cursor: pointer;">
+                        <div class="member-info">
+                            <div class="member-name">{{ member.user.username }}</div>
+                            <span class="member-role admin">Администратор</span>
+                        </div>
+                        {% if current_membership.role == 'owner' and member.user.id != group.owner_id %}
+                        <div class="member-actions">
+                            <button class="btn-icon" onclick="changeRole({{ member.user.id }}, 'member')" title="Убрать админа">
+                                <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                    <use xlink:href="#icon-arrow-right"></use>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" onclick="removeMember({{ member.user.id }})" title="Удалить" style="color: var(--danger);">
+                                <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                    <use xlink:href="#icon-delete"></use>
+                                </svg>
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                {% if not has_admins %}
+                    <p style="color: var(--text-muted); text-align: center; padding: 20px;">Нет администраторов</p>
+                {% endif %}
+            </div>
+
+            <div>
+                <h3 style="color: var(--text-primary); margin-bottom: 15px;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 8px;">
+                        <use xlink:href="#icon-group"></use>
+                    </svg>
+                    Участники
+                </h3>
+                {% set has_members = false %}
+                {% for member in members if member.role == 'member' %}
+                    {% set has_members = true %}
+                    <div class="member-item">
+                        <img src="{{ url_for('static', filename='uploads/' + member.user.avatar) }}"
+                             alt="Avatar"
+                             class="member-avatar"
+                             onclick="window.location.href='{{ url_for('profile', user_id=member.user.id) }}'"
+                             style="cursor: pointer;">
+                        <div class="member-info">
+                            <div class="member-name">{{ member.user.username }}</div>
+                            <span class="member-role">Участник</span>
+                        </div>
+                        {% if current_membership.role == 'owner' %}
+                        <div class="member-actions">
+                            <button class="btn-icon" onclick="changeRole({{ member.user.id }}, 'admin')" title="Сделать админом">
+                                <svg width="20" height="20" viewBox="0 0 24 24">
+                                    <use xlink:href="#icon-edit"></use>
+                                </svg>
+                            </button>
+                            <button class="btn-icon" onclick="removeMember({{ member.user.id }})" title="Удалить" style="color: var(--danger);">
+                                <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                    <use xlink:href="#icon-delete"></use>
+                                </svg>
+                            </button>
+                        </div>
+                        {% elif current_membership.role == 'admin' %}
+                        <div class="member-actions">
+                            <button class="btn-icon" onclick="removeMember({{ member.user.id }})" title="Удалить" style="color: var(--danger);">
+                                <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                    <use xlink:href="#icon-delete"></use>
+                                </svg>
+                            </button>
+                        </div>
+                        {% endif %}
+                    </div>
+                {% endfor %}
+                {% if not has_members %}
+                    <p style="color: var(--text-muted); text-align: center; padding: 20px;">Нет участников</p>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Модальное окно добавления участника -->
+<div class="modal" id="addMemberModal">
+    <div class="modal-content">
+        <div class="modal-header">
+            <h2>
+                <svg width="24" height="24" viewBox="0 0 24 24" style="margin-right: 10px;">
+                    <use xlink:href="#icon-group"></use>
+                </svg>
+                Добавить участника
+            </h2>
+            <span class="close-modal" onclick="hideAddMemberModal()">&times;</span>
+        </div>
+        <form id="addMemberForm">
+            <div class="form-group">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" placeholder="Введите username" required>
+            </div>
+            <div style="display: flex; gap: 10px;">
+                <button type="button" class="btn btn-secondary" style="flex: 1;" onclick="hideAddMemberModal()">Отмена</button>
+                <button type="submit" class="btn" style="flex: 1;">Добавить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function showAddMemberModal() {
+        document.getElementById('addMemberModal').classList.add('active');
+    }
+
+    function hideAddMemberModal() {
+        document.getElementById('addMemberModal').classList.remove('active');
+    }
+
+    document.getElementById('addMemberForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(this);
+
+        fetch('/group/{{ group.id }}/add_member', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.error || 'Ошибка при добавлении участника');
+            }
+        });
+    });
+
+    function removeMember(userId) {
+        if (confirm('Удалить участника из группы?')) {
+            fetch(`/group/{{ group.id }}/remove_member/${userId}`, {
+                method: 'POST'
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Ошибка при удалении участника');
+                }
+            });
+        }
+    }
+
+    function changeRole(userId, role) {
+        const roleName = role === 'admin' ? 'администратора' : 'участника';
+        if (confirm(`Назначить пользователя ${roleName}?`)) {
+            const formData = new FormData();
+            formData.append('role', role);
+
+            fetch(`/group/{{ group.id }}/change_role/${userId}`, {
+                method: 'POST',
+                body: formData
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.error || 'Ошибка при изменении роли');
+                }
+            });
+        }
+    }
+
+    // Закрытие модальных окон
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) {
+                this.classList.remove('active');
+            }
+        });
+    });
+
+    document.addEventListener('keydown', function(event) {
+        if (event.key === 'Escape') {
+            hideAddMemberModal();
+        }
+    });
+</script>
+{% endblock %}
