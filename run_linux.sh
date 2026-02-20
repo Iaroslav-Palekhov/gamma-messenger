@@ -7,8 +7,6 @@ echo -e "${BLUE}║     Gamma Messenger для Linux      ║${NC}"
 echo -e "${BLUE}╚════════════════════════════════════╝${NC}"
 echo
 
-sudo apt install python3 python3-pip python3-venv -y
-
 echo "Python3 найден: $(python3 --version)"
 
 sudo apt install python3-venv -y
