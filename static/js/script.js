@@ -1,4 +1,8 @@
+// Дополнительные функции JavaScript
+
+// Закрытие модальных окон при клике вне их
 document.addEventListener('DOMContentLoaded', function() {
+    // Для модального окна изображений
     const imageModal = document.getElementById('imageModal');
     if (imageModal) {
         imageModal.addEventListener('click', function(e) {
@@ -8,6 +12,7 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     
+    // Для формы нового чата
     const newChatForm = document.querySelector('.new-chat-form');
     const overlay = document.querySelector('.overlay');
     
@@ -19,6 +24,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 });
 
+// Функция для плавной прокрутки
 function smoothScrollToBottom(element) {
     element.scrollTo({
         top: element.scrollHeight,
@@ -26,6 +32,7 @@ function smoothScrollToBottom(element) {
     });
 }
 
+// Форматирование времени
 function formatTime(date) {
     return date.toLocaleTimeString('ru-RU', {
         hour: '2-digit',
@@ -33,11 +40,13 @@ function formatTime(date) {
     });
 }
 
+// Валидация email
 function isValidEmail(email) {
     const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     return regex.test(email);
 }
 
+// Уведомления
 function showNotification(message, type = 'info') {
     const notification = document.createElement('div');
     notification.className = `notification ${type}`;
@@ -69,6 +78,7 @@ function showNotification(message, type = 'info') {
     }, 3000);
 }
 
+// Анимации
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideIn {
@@ -106,12 +116,14 @@ style.textContent = `
 `;
 document.head.appendChild(style);
 
+// Функция для обработки ошибок загрузки изображений
 function handleImageError(img) {
     img.onerror = null;
     img.src = '/static/images/default-error.png';
     img.alt = 'Не удалось загрузить изображение';
 }
 
+// Добавляем обработчики ко всем изображениям
 document.addEventListener('DOMContentLoaded', function() {
     const images = document.querySelectorAll('img');
     images.forEach(img => {

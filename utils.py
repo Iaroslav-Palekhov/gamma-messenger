@@ -24,12 +24,14 @@ def create_upload_folders(app):
 
 def create_default_avatars(app):
     """Создает дефолтные аватарки и иконки групп"""
+    # Дефолтная аватарка
     default_avatar_path = os.path.join(app.config['UPLOAD_FOLDER'], 'avatars', 'default.png')
     if not os.path.exists(default_avatar_path):
         os.makedirs(os.path.dirname(default_avatar_path), exist_ok=True)
         img = Image.new('RGB', (200, 200), color='#00a884')
         img.save(default_avatar_path)
     
+    # Дефолтная иконка группы
     default_group_icon_path = os.path.join(app.config['UPLOAD_FOLDER'], 'group_icons', 'default.png')
     if not os.path.exists(default_group_icon_path):
         os.makedirs(os.path.dirname(default_group_icon_path), exist_ok=True)
@@ -159,20 +161,25 @@ import re
 def extract_link_preview(url):
     """Извлекает метаданные со страницы (title, description, image)"""
     try:
+        # Проверяем, что URL валидный
         parsed = urlparse(url)
         if not parsed.scheme:
             url = 'https://' + url
             parsed = urlparse(url)
         
+        # Заголовки для имитации браузера
         headers = {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
         }
         
+        # Делаем запрос с таймаутом
         response = requests.get(url, headers=headers, timeout=5, verify=False)
         response.raise_for_status()
         
+        # Парсим HTML
         soup = BeautifulSoup(response.text, 'html.parser')
         
+        # Извлекаем title
         title = None
         if soup.find('meta', property='og:title'):
             title = soup.find('meta', property='og:title')['content']
@@ -181,12 +188,14 @@ def extract_link_preview(url):
         elif soup.title:
             title = soup.title.string
         
+        # Извлекаем description
         description = None
         if soup.find('meta', property='og:description'):
             description = soup.find('meta', property='og:description')['content']
         elif soup.find('meta', attrs={'name': 'description'}):
             description = soup.find('meta', attrs={'name': 'description'})['content']
         
+        # Извлекаем image
         image = None
         if soup.find('meta', property='og:image'):
             image = soup.find('meta', property='og:image')['content']
@@ -195,10 +204,12 @@ def extract_link_preview(url):
             image = soup.find('meta', attrs={'name': 'twitter:image'})['content']
             image = urljoin(url, image)
         else:
+            # Пробуем найти первую картинку на странице
             img_tag = soup.find('img', src=True)
             if img_tag:
                 image = urljoin(url, img_tag['src'])
         
+        # Очищаем и ограничиваем данные
         if title:
             title = title.strip()[:200]
         if description:
@@ -242,5 +253,4 @@ def extract_urls_from_text(text):
         re.IGNORECASE
     )
     
-
     return url_pattern.findall(text)

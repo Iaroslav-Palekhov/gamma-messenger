@@ -34,10 +34,23 @@
             <button type="submit" class="btn btn-block">Войти</button>
         </form>
 
-        <div class="auth-link">
-            Нет аккаунта?
-            <a href="{{ url_for('register') }}">Создать аккаунт</a>
+        <div class="auth-links" style="margin-top: 15px; text-align: center;">
+            <div style="margin-bottom: 10px;">
+                <a href="{{ url_for('forgot_password') }}" style="color: var(--accent); text-decoration: none; font-size: 14px;">
+                    Забыли пароль?
+                </a>
+            </div>
+            <div class="auth-link">
+                Нет аккаунта?
+                <a href="{{ url_for('register') }}">Создать аккаунт</a>
+            </div>
         </div>
     </div>
 </div>
+
+<style>
+.auth-links a:hover {
+    text-decoration: underline;
+}
+</style>
 {% endblock %}

@@ -14,3 +14,4 @@ typing_extensions
 Werkzeug
 bs4
 requests
+cryptography

@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 import mimetypes
 
-from models import User, Group, GroupMember, Chat, Message, ForwardedMessage
+from models import User, Group, GroupMember, Chat, Message, ForwardedMessage, PasswordReset
 from utils import (
     compress_image, get_file_category, get_file_icon,
     format_file_size, is_file_too_large, save_file,
@@ -20,6 +20,7 @@ def register_routes(app, db, login_manager):
             return redirect(url_for('chats'))
         return redirect(url_for('login'))
 
+    # ============ АВТОРИЗАЦИЯ ============
     @app.route('/register', methods=['GET', 'POST'])
     def register():
         if current_user.is_authenticated:
@@ -83,6 +84,7 @@ def register_routes(app, db, login_manager):
         logout_user()
         return redirect(url_for('login'))
 
+    # ============ ЧАТЫ ============
     @app.route('/chats')
     @login_required
     def chats():
@@ -166,14 +168,6 @@ def register_routes(app, db, login_manager):
         messages = Message.query.filter_by(chat_id=chat_id, is_deleted=False).order_by(Message.timestamp).all()
         other_user = chat_obj.user2 if chat_obj.user1_id == current_user.id else chat_obj.user1
 
-        first_unread = Message.query.filter_by(
-            chat_id=chat_id,
-            receiver_id=current_user.id,
-            is_read=False
-        ).order_by(Message.timestamp).first()
-
-        first_unread_id = first_unread.id if first_unread else None
-
         unread_messages = Message.query.filter_by(
             chat_id=chat_id,
             receiver_id=current_user.id,
@@ -184,7 +178,7 @@ def register_routes(app, db, login_manager):
             msg.is_read = True
 
         db.session.commit()
-        return render_template('chat.html', chat=chat_obj, messages=messages, other_user=other_user, first_unread_id=first_unread_id)
+        return render_template('chat.html', chat=chat_obj, messages=messages, other_user=other_user)
 
     @app.route('/chat/<int:chat_id>/delete', methods=['POST'])
     @login_required
@@ -288,14 +282,15 @@ def register_routes(app, db, login_manager):
             })
 
         chats_data.sort(key=lambda x: x['last_message_time'] or '', reverse=True)
-
+    
         total_unread = sum(c['unread_count'] for c in chats_data)
-
+    
         return jsonify({
             'chats': chats_data,
             'total_unread': total_unread
         })
 
+    # ============ ПРОФИЛЬ ============
     @app.route('/profile/<int:user_id>')
     @login_required
     def profile(user_id):
@@ -331,6 +326,7 @@ def register_routes(app, db, login_manager):
 
         return render_template('edit_profile.html')
 
+    # ============ ГРУППЫ ============
     @app.route('/groups')
     @login_required
     def groups():
@@ -410,13 +406,6 @@ def register_routes(app, db, login_manager):
 
         messages = Message.query.filter_by(group_id=group_id, is_deleted=False).order_by(Message.timestamp).all()
 
-        first_unread = Message.query.filter_by(
-            group_id=group_id,
-            is_read=False
-        ).filter(Message.sender_id != current_user.id).order_by(Message.timestamp).first()
-
-        first_unread_id = first_unread.id if first_unread else None
-
         unread_messages = Message.query.filter_by(
             group_id=group_id,
             is_read=False
@@ -426,12 +415,7 @@ def register_routes(app, db, login_manager):
             msg.is_read = True
 
         db.session.commit()
-
-        return render_template('group_chat.html',
-                             group=group,
-                             messages=messages,
-                             membership=membership,
-                             first_unread_id=first_unread_id)
+        return render_template('group_chat.html', group=group, messages=messages, membership=membership)
 
     @app.route('/group/<int:group_id>/members')
     @login_required
@@ -570,6 +554,7 @@ def register_routes(app, db, login_manager):
 
         db.session.commit()
 
+        # ВАЖНО: Перенаправляем обратно в чат группы
         return redirect(url_for('group_chat', group_id=group.id))
 
     @app.route('/group/<int:group_id>/delete', methods=['POST'])
@@ -615,7 +600,8 @@ def register_routes(app, db, login_manager):
             db.session.commit()
 
         return jsonify({'success': True})
-        
+
+    # ============ СООБЩЕНИЯ ============
     @app.route('/send_message', methods=['POST'])
     @login_required
     def send_message():
@@ -631,12 +617,14 @@ def register_routes(app, db, login_manager):
             reply_to_id=reply_to_id if reply_to_id else None
         )
 
+        # 🔥 Проверяем, есть ли в сообщении URL и извлекаем превью
         if content and contains_url(content):
             urls = extract_urls_from_text(content)
             if urls:
+                # Берем первый URL для превью
                 first_url = urls[0]
                 preview_data = extract_link_preview(first_url)
-
+                
                 if preview_data:
                     message.link_url = preview_data['url']
                     message.link_title = preview_data['title']
@@ -696,7 +684,7 @@ def register_routes(app, db, login_manager):
 
         return jsonify({
             'success': True,
-            'message_id': message.id,
+            'message_id': message.id, 
             'timestamp': message.timestamp.strftime('%H:%M'),
             'content': message.content,
             'image_path': url_for('download_file', filepath=message.image_path) if message.image_path else None,
@@ -735,18 +723,22 @@ def register_routes(app, db, login_manager):
             if not membership:
                 return jsonify({'error': 'Нет доступа к оригинальному сообщению'}), 403
 
+        # 🔧 ИСПРАВЛЕНИЕ: Копируем оригинальный контент + дополнительный текст
         if original_message.content and additional_text:
+            # Если есть и оригинальный текст, и дополнительный - объединяем
             forwarded_content = f"{additional_text}\n\n{original_message.content}"
         elif original_message.content:
+            # Только оригинальный текст
             forwarded_content = original_message.content
         elif additional_text:
+            # Только дополнительный текст
             forwarded_content = additional_text
         else:
             forwarded_content = None
 
         forwarded_message = Message(
             sender_id=current_user.id,
-            content=forwarded_content,
+            content=forwarded_content,  # ✅ Теперь используется правильный контент
             is_forwarded=True,
             forwarded_from_id=original_message.id,
             show_forward_sender=show_sender
@@ -949,7 +941,6 @@ def register_routes(app, db, login_manager):
                 'link_title': msg.link_title,
                 'link_description': msg.link_description,
                 'link_image': msg.link_image,
-                'unread': not msg.is_read and msg.sender_id != current_user.id
             })
 
         return jsonify(messages_data)
@@ -960,6 +951,31 @@ def register_routes(app, db, login_manager):
         directory = os.path.join(app.config['UPLOAD_FOLDER'], os.path.dirname(filepath))
         filename = os.path.basename(filepath)
         return send_from_directory(directory, filename, as_attachment=True)
+
+    @app.route('/delete_message/<int:message_id>', methods=['POST'])
+    @login_required
+    def delete_message(message_id):
+        message = Message.query.get_or_404(message_id)
+        if message.sender_id != current_user.id:
+            return jsonify({'error': 'Нет прав для удаления этого сообщения'}), 403
+        message.is_deleted = True
+        message.content = None
+        db.session.commit()
+        return jsonify({'success': True})
+
+    @app.route('/edit_message/<int:message_id>', methods=['POST'])
+    @login_required
+    def edit_message(message_id):
+        message = Message.query.get_or_404(message_id)
+        if message.sender_id != current_user.id:
+            return jsonify({'error': 'Нет прав для редактирования этого сообщения'}), 403
+        new_content = request.form.get('content', '').strip()
+        if not new_content:
+            return jsonify({'error': 'Текст сообщения не может быть пустым'}), 400
+        message.content = new_content
+        message.is_edited = True
+        db.session.commit()
+        return jsonify({'success': True, 'content': new_content})
 
     @app.route('/get_unread_counts')
     @login_required
@@ -988,5 +1004,279 @@ def register_routes(app, db, login_manager):
 
         return jsonify({'unread_count': total_unread})
 
-    return app
+    # ============ ЗАКРЕПЛЕНИЕ СООБЩЕНИЙ ============
+    @app.route('/pin_message/<int:message_id>', methods=['POST'])
+    @login_required
+    def pin_message(message_id):
+        message = Message.query.get_or_404(message_id)
+        if message.chat_id:
+            chat_obj = Chat.query.get(message.chat_id)
+            if not chat_obj or (chat_obj.user1_id != current_user.id and chat_obj.user2_id != current_user.id):
+                return jsonify({'error': 'Нет доступа'}), 403
+        elif message.group_id:
+            membership = GroupMember.query.filter_by(group_id=message.group_id, user_id=current_user.id).first()
+            if not membership or membership.role not in ['owner', 'admin']:
+                return jsonify({'error': 'Только администраторы могут закреплять сообщения'}), 403
+        message.is_pinned = True
+        message.pinned_by_id = current_user.id
+        message.pinned_at = datetime.utcnow()
+        db.session.commit()
+        sender = User.query.get(message.sender_id)
+        return jsonify({
+            'success': True, 'message_id': message.id,
+            'content': message.content,
+            'sender_name': sender.username if sender else 'Unknown',
+            'timestamp': message.timestamp.strftime('%H:%M'),
+            'has_image': bool(message.image_path),
+            'has_file': bool(message.file_path),
+            'file_name': message.file_name
+        })
 
+    @app.route('/unpin_message/<int:message_id>', methods=['POST'])
+    @login_required
+    def unpin_message(message_id):
+        message = Message.query.get_or_404(message_id)
+        if message.chat_id:
+            chat_obj = Chat.query.get(message.chat_id)
+            if not chat_obj or (chat_obj.user1_id != current_user.id and chat_obj.user2_id != current_user.id):
+                return jsonify({'error': 'Нет доступа'}), 403
+        elif message.group_id:
+            membership = GroupMember.query.filter_by(group_id=message.group_id, user_id=current_user.id).first()
+            if not membership or membership.role not in ['owner', 'admin']:
+                return jsonify({'error': 'Только администраторы могут откреплять сообщения'}), 403
+        message.is_pinned = False
+        message.pinned_by_id = None
+        message.pinned_at = None
+        db.session.commit()
+        return jsonify({'success': True})
+
+    @app.route('/get_pinned_messages/<int:context_id>')
+    @login_required
+    def get_pinned_messages(context_id):
+        is_group = request.args.get('is_group', 'false').lower() == 'true'
+        if is_group:
+            membership = GroupMember.query.filter_by(group_id=context_id, user_id=current_user.id).first()
+            if not membership:
+                return jsonify({'error': 'Нет доступа'}), 403
+            pinned = Message.query.filter_by(group_id=context_id, is_pinned=True, is_deleted=False).order_by(Message.pinned_at.desc()).all()
+        else:
+            chat_obj = Chat.query.get_or_404(context_id)
+            if chat_obj.user1_id != current_user.id and chat_obj.user2_id != current_user.id:
+                return jsonify({'error': 'Нет доступа'}), 403
+            pinned = Message.query.filter_by(chat_id=context_id, is_pinned=True, is_deleted=False).order_by(Message.pinned_at.desc()).all()
+        result = []
+        for msg in pinned:
+            sender = User.query.get(msg.sender_id)
+            result.append({
+                'id': msg.id, 'content': msg.content,
+                'sender_name': sender.username if sender else 'Unknown',
+                'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M'),
+                'has_image': bool(msg.image_path),
+                'has_file': bool(msg.file_path),
+                'file_name': msg.file_name
+            })
+        return jsonify(result)
+
+    # ============ ПОИСК В ЧАТЕ ============
+    @app.route('/search_messages/<int:context_id>')
+    @login_required
+    def search_messages(context_id):
+        is_group = request.args.get('is_group', 'false').lower() == 'true'
+        query_str = request.args.get('q', '').strip()
+        if not query_str:
+            return jsonify([])
+        if is_group:
+            membership = GroupMember.query.filter_by(group_id=context_id, user_id=current_user.id).first()
+            if not membership:
+                return jsonify({'error': 'Нет доступа'}), 403
+            messages = Message.query.filter(
+                Message.group_id == context_id,
+                Message.content.ilike(f'%{query_str}%'),
+                Message.is_deleted == False
+            ).order_by(Message.timestamp.desc()).limit(50).all()
+        else:
+            chat_obj = Chat.query.get_or_404(context_id)
+            if chat_obj.user1_id != current_user.id and chat_obj.user2_id != current_user.id:
+                return jsonify({'error': 'Нет доступа'}), 403
+            messages = Message.query.filter(
+                Message.chat_id == context_id,
+                Message.content.ilike(f'%{query_str}%'),
+                Message.is_deleted == False
+            ).order_by(Message.timestamp.desc()).limit(50).all()
+        result = []
+        for msg in messages:
+            sender = User.query.get(msg.sender_id)
+            result.append({
+                'id': msg.id, 'content': msg.content,
+                'sender_name': sender.username if sender else 'Unknown',
+                'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M'),
+                'is_mine': msg.sender_id == current_user.id
+            })
+        return jsonify(result)
+
+
+    # ============ ВОССТАНОВЛЕНИЕ ПАРОЛЯ ============
+    import secrets
+    from datetime import datetime, timedelta
+
+    @app.route('/forgot_password', methods=['GET', 'POST'])
+    def forgot_password():
+        if current_user.is_authenticated:
+            return redirect(url_for('chats'))
+
+        if request.method == 'POST':
+            username = request.form.get('username')
+            email = request.form.get('email')
+
+            if not username or not email:
+                return render_template('forgot_password.html', error='Заполните все поля')
+
+            # Ищем пользователя
+            user = User.query.filter_by(username=username, email=email).first()
+
+            if not user:
+                # Не говорим точно, что пользователь не найден (безопасность)
+                return render_template('forgot_password.html',
+                                    success='Если данные верны, инструкции отправлены на email')
+
+            # Удаляем старые неиспользованные токены
+            PasswordReset.query.filter_by(user_id=user.id, used=False).delete()
+
+            # Генерируем токен
+            token = secrets.token_urlsafe(32)
+
+            # Создаем запись в БД (токен действителен 1 час)
+            reset_request = PasswordReset(
+                user_id=user.id,
+                token=token,
+                expires_at=datetime.utcnow() + timedelta(hours=1)
+            )
+
+            db.session.add(reset_request)
+            db.session.commit()
+
+            # ИСПРАВЛЕНИЕ: Сразу перенаправляем на страницу с токеном
+            return redirect(url_for('reset_password', token=token))
+
+        return render_template('forgot_password.html')
+
+    @app.route('/reset_password/<token>', methods=['GET', 'POST'])
+    def reset_password(token):
+        if current_user.is_authenticated:
+            return redirect(url_for('chats'))
+
+        # Ищем токен в БД
+        reset_request = PasswordReset.query.filter_by(token=token, used=False).first()
+
+        if not reset_request:
+            return render_template('forgot_password.html',
+                                error='Недействительная ссылка для сброса пароля')
+
+        if reset_request.expires_at < datetime.utcnow():
+            reset_request.used = True
+            db.session.commit()
+            return render_template('forgot_password.html',
+                                error='Срок действия ссылки истек')
+
+        if request.method == 'POST':
+            new_password = request.form.get('new_password')
+            confirm_password = request.form.get('confirm_password')
+
+            if not new_password or not confirm_password:
+                return render_template('reset_password.html',
+                                    error='Заполните все поля',
+                                    token=token)
+
+            if new_password != confirm_password:
+                return render_template('reset_password.html',
+                                    error='Пароли не совпадают',
+                                    token=token)
+
+            if len(new_password) < 8:
+                return render_template('reset_password.html',
+                                    error='Пароль должен быть минимум 8 символов',
+                                    token=token)
+
+            # Находим пользователя
+            user = User.query.get(reset_request.user_id)
+            if not user:
+                return render_template('forgot_password.html',
+                                    error='Пользователь не найден')
+
+            # Меняем пароль
+            from werkzeug.security import generate_password_hash
+            user.password = generate_password_hash(new_password)
+
+            # Помечаем токен как использованный
+            reset_request.used = True
+
+            db.session.commit()
+
+            # Логируем смену пароля
+            try:
+                from security import SecurityAudit
+                SecurityAudit.log_password_reset(user.id, user.username)
+            except:
+                pass
+
+            return render_template('login.html',
+                                success='Пароль успешно изменен. Теперь вы можете войти.')
+
+        return render_template('reset_password.html', token=token)
+
+    # ============ МЕДИАГАЛЕРЕЯ ============
+    @app.route('/get_media/<int:context_id>')
+    @login_required
+    def get_media(context_id):
+        is_group = request.args.get('is_group', 'false').lower() == 'true'
+        media_type = request.args.get('type', 'images')
+        if is_group:
+            membership = GroupMember.query.filter_by(group_id=context_id, user_id=current_user.id).first()
+            if not membership:
+                return jsonify({'error': 'Нет доступа'}), 403
+            base_query = Message.query.filter(Message.group_id == context_id, Message.is_deleted == False)
+        else:
+            chat_obj = Chat.query.get_or_404(context_id)
+            if chat_obj.user1_id != current_user.id and chat_obj.user2_id != current_user.id:
+                return jsonify({'error': 'Нет доступа'}), 403
+            base_query = Message.query.filter(Message.chat_id == context_id, Message.is_deleted == False)
+        result = []
+        if media_type == 'images':
+            msgs = base_query.filter(Message.image_path != None).order_by(Message.timestamp.desc()).limit(100).all()
+            for msg in msgs:
+                sender = User.query.get(msg.sender_id)
+                result.append({
+                    'id': msg.id,
+                    'url': url_for('download_file', filepath=msg.image_path),
+                    'sender_name': sender.username if sender else 'Unknown',
+                    'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M')
+                })
+        elif media_type == 'files':
+            msgs = base_query.filter(Message.file_path != None).order_by(Message.timestamp.desc()).limit(100).all()
+            for msg in msgs:
+                sender = User.query.get(msg.sender_id)
+                result.append({
+                    'id': msg.id,
+                    'url': url_for('download_file', filepath=msg.file_path),
+                    'file_name': msg.file_name,
+                    'file_size': format_file_size(msg.file_size) if msg.file_size else None,
+                    'file_icon': get_file_icon(msg.file_name) if msg.file_name else '📎',
+                    'sender_name': sender.username if sender else 'Unknown',
+                    'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M')
+                })
+        elif media_type == 'links':
+            msgs = base_query.filter(Message.link_url != None).order_by(Message.timestamp.desc()).limit(100).all()
+            for msg in msgs:
+                sender = User.query.get(msg.sender_id)
+                result.append({
+                    'id': msg.id,
+                    'url': msg.link_url,
+                    'title': msg.link_title,
+                    'description': msg.link_description,
+                    'image': msg.link_image,
+                    'sender_name': sender.username if sender else 'Unknown',
+                    'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M')
+                })
+        return jsonify(result)
+
+    return app

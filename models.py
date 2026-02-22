@@ -78,6 +78,10 @@ class Message(db.Model):
     reply_to = db.relationship('Message', foreign_keys=[reply_to_id], remote_side=[id], backref='replies')
     forwarded_from = db.relationship('Message', foreign_keys=[forwarded_from_id], remote_side=[id], backref='forwarded_copies')
 
+    is_pinned = db.Column(db.Boolean, default=False)
+    pinned_by_id = db.Column(db.Integer, db.ForeignKey("user.id"), nullable=True)
+    pinned_at = db.Column(db.DateTime, nullable=True)
+
     link_url = db.Column(db.String(500), nullable=True)
     link_title = db.Column(db.String(200), nullable=True)
     link_description = db.Column(db.Text, nullable=True)
@@ -97,3 +101,15 @@ class ForwardedMessage(db.Model):
     original_message = db.relationship('Message', foreign_keys=[original_message_id])
     forwarded_message = db.relationship('Message', foreign_keys=[forwarded_message_id])
     forwarded_by = db.relationship('User', foreign_keys=[forwarded_by_id])
+
+
+class PasswordReset(db.Model):
+    """Модель для токенов сброса пароля"""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    token = db.Column(db.String(100), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    expires_at = db.Column(db.DateTime, nullable=False)
+    used = db.Column(db.Boolean, default=False)
+
+    user = db.relationship('User', backref=db.backref('reset_tokens', lazy=True))

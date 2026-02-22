@@ -1,3 +1,4 @@
+/* Стили для chats.html */
     * {
         margin: 0;
         padding: 0;
@@ -360,6 +361,7 @@
         color: var(--text-primary);
     }
 
+    /* Модальные окна */
     .modal {
         display: none;
         position: fixed;
@@ -449,6 +451,7 @@
         flex: 1;
     }
 
+    /* Анимации */
     @keyframes slideIn {
         from {
             transform: translateX(100%);
@@ -471,12 +474,14 @@
         }
     }
 
+    /* Скрываем стандартный контейнер */
     .app-container,
     .sidebar,
     .main-content {
         display: none;
     }
 
+    /* Мобильная адаптация */
     @media (max-width: 768px) {
         .chats-header {
             padding: 12px 15px;
@@ -508,5 +513,4 @@
             padding: 8px 10px;
             font-size: 12px;
         }
-
     }

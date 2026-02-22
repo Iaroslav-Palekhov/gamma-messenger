@@ -833,6 +833,12 @@ function addMessageToChat(message) {
                                 <use xlink:href="#icon-group"></use>
                             </svg>
                         </button>
+                        ${isSent && message.content ? `<button class="message-action-btn" onclick="editMessage(${message.id}, this)" title="Редактировать">
+                            <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>
+                        </button>` : ''}
+                        ${isSent ? `<button class="message-action-btn" onclick="deleteMessage(${message.id})" title="Удалить" style="color:var(--danger);">
+                            <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
+                        </button>` : ''}
                     </div>
                 </div>
             </div>
@@ -1088,6 +1094,12 @@ function createRealMessage(data, messageText, file, cachedReplyData = null) {
                                 <use xlink:href="#icon-group"></use>
                             </svg>
                         </button>
+                        ${data.content ? `<button class="message-action-btn" onclick="editMessage(${data.message_id}, this)" title="Редактировать">
+                            <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>
+                        </button>` : ''}
+                        <button class="message-action-btn" onclick="deleteMessage(${data.message_id})" title="Удалить" style="color:var(--danger);">
+                            <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1120,6 +1132,86 @@ function restoreFailedMessage(tempMessageId, messageText, error) {
             </div>
         `;
     }
+}
+
+// Удаление сообщения
+function deleteMessage(messageId) {
+    if (!confirm('Удалить это сообщение?')) return;
+    fetch(`/delete_message/${messageId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const msg = document.querySelector(`.message[data-message-id="${messageId}"]`);
+                if (msg) msg.remove();
+            } else {
+                alert(data.error || 'Ошибка при удалении');
+            }
+        });
+}
+
+// Редактирование сообщения
+function editMessage(messageId, btn) {
+    const bubble = btn.closest('.message-bubble');
+    const contentDiv = bubble.querySelector('.message-content p');
+    if (!contentDiv) return;
+    const currentText = contentDiv.textContent;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.innerHTML = `
+        <div class="modal-content" style="max-width: 500px;">
+            <div class="modal-header">
+                <h2>
+                    <svg width="22" height="22" viewBox="0 0 24 24" style="margin-right: 10px;">
+                        <use xlink:href="#icon-edit"></use>
+                    </svg>
+                    Редактировать сообщение
+                </h2>
+                <span class="close-modal" onclick="this.closest('.modal').remove()">&times;</span>
+            </div>
+            <div class="form-group">
+                <textarea id="editMessageText" style="width:100%; min-height:100px; padding:12px; background:var(--bg-tertiary); border:1px solid var(--border); border-radius:12px; color:var(--text-primary); font-size:15px; resize:vertical;">${escapeHtml(currentText)}</textarea>
+            </div>
+            <div style="display:flex; gap:10px; margin-top:15px;">
+                <button class="btn btn-secondary" style="flex:1;" onclick="this.closest('.modal').remove()">Отмена</button>
+                <button class="btn" style="flex:1;" onclick="submitEdit(${messageId}, this)">Сохранить</button>
+            </div>
+        </div>
+    `;
+    document.body.appendChild(modal);
+    modal.querySelector('#editMessageText').focus();
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+}
+
+function submitEdit(messageId, btn) {
+    const modal = btn.closest('.modal');
+    const newText = modal.querySelector('#editMessageText').value.trim();
+    if (!newText) return alert('Текст не может быть пустым');
+
+    const formData = new FormData();
+    formData.append('content', newText);
+
+    fetch(`/edit_message/${messageId}`, { method: 'POST', body: formData })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                const msg = document.querySelector(`.message[data-message-id="${messageId}"]`);
+                if (msg) {
+                    const p = msg.querySelector('.message-content p');
+                    if (p) p.textContent = data.content;
+                    const meta = msg.querySelector('.message-meta');
+                    if (meta && !meta.querySelector('.edited-label')) {
+                        const span = document.createElement('span');
+                        span.className = 'edited-label';
+                        span.textContent = 'отредактировано';
+                        meta.insertBefore(span, meta.firstChild);
+                    }
+                }
+                modal.remove();
+            } else {
+                alert(data.error || 'Ошибка при редактировании');
+            }
+        });
 }
 
 // Повторная отправка
@@ -1162,6 +1254,146 @@ function downloadFile(filePath, fileName) {
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+}
+
+// ========== ЗАКРЕПЛЕНИЕ СООБЩЕНИЙ ==========
+function pinMessage(messageId) {
+    fetch(`/pin_message/${messageId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) {
+                showNotification('Сообщение закреплено', 'success');
+                refreshPinnedBanner();
+            } else { alert(data.error || 'Ошибка'); }
+        });
+}
+function unpinMessage(messageId) {
+    if (!confirm('Открепить это сообщение?')) return;
+    fetch(`/unpin_message/${messageId}`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.success) { showNotification('Сообщение откреплено', 'info'); refreshPinnedBanner(); }
+            else { alert(data.error || 'Ошибка'); }
+        });
+}
+function refreshPinnedBanner() {
+    fetch(`/get_pinned_messages/{{ chat.id }}`)
+        .then(r => r.json())
+        .then(pinned => {
+            let banner = document.getElementById('pinnedBanner');
+            if (pinned.length === 0) { if (banner) banner.remove(); return; }
+            const p = pinned[0];
+            const preview = p.content ? (p.content.length > 60 ? p.content.substring(0, 60) + '...' : p.content) : p.has_image ? '📷 Фото' : p.has_file ? `📎 ${p.file_name || 'Файл'}` : '';
+            if (banner) {
+                banner.querySelector('[data-preview]').textContent = preview;
+                banner.onclick = (e) => { if (!e.target.closest('button')) scrollToMessage(p.id); };
+            } else {
+                banner = document.createElement('div');
+                banner.id = 'pinnedBanner';
+                banner.style.cssText = 'padding:10px 20px; background:var(--bg-secondary); border-bottom:2px solid var(--accent); cursor:pointer; display:flex; align-items:center; gap:12px; flex-shrink:0;';
+                banner.onclick = (e) => { if (!e.target.closest('button')) scrollToMessage(p.id); };
+                banner.innerHTML = `<svg width="18" height="18" viewBox="0 0 1024 1024" style="color:var(--accent); flex-shrink:0;"><use xlink:href="#icon-attach"></use></svg><div style="flex:1; min-width:0;"><div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:2px;">Закреплённое сообщение</div><div data-preview style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(preview)}</div></div><button onclick="hidePinnedBanner()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; flex-shrink:0;">&times;</button>`;
+                const msgs = document.getElementById('messagesContainer');
+                msgs.parentElement.insertBefore(banner, msgs);
+            }
+        });
+}
+function hidePinnedBanner() { const b = document.getElementById('pinnedBanner'); if (b) b.style.display = 'none'; }
+function showPinnedMessages() {
+    fetch(`/get_pinned_messages/{{ chat.id }}`)
+        .then(r => r.json())
+        .then(pinned => {
+            const modal = document.createElement('div');
+            modal.className = 'modal active';
+            let html = pinned.length === 0 ? '<p style="color:var(--text-muted);text-align:center;padding:30px;">Нет закреплённых сообщений</p>' : '';
+            pinned.forEach(p => {
+                const preview = p.content ? escapeHtml(p.content.length > 80 ? p.content.substring(0, 80) + '...' : p.content) : p.has_image ? '📷 Фото' : '📎 Файл';
+                html += `<div style="padding:14px;background:var(--bg-tertiary);border-radius:12px;margin-bottom:8px;cursor:pointer;border-left:3px solid var(--accent);" onclick="scrollToMessage(${p.id});this.closest('.modal').remove();"><div style="font-size:12px;color:var(--accent);margin-bottom:4px;font-weight:600;">${escapeHtml(p.sender_name)}</div><div style="font-size:14px;color:var(--text-primary);margin-bottom:6px;">${preview}</div><div style="font-size:11px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center;"><span>${p.timestamp}</span><button onclick="event.stopPropagation();unpinMessage(${p.id});this.closest('.modal').remove();" style="background:rgba(255,82,82,0.1);border:none;color:var(--danger);cursor:pointer;font-size:12px;padding:3px 8px;border-radius:6px;">Открепить</button></div></div>`;
+            });
+            modal.innerHTML = `<div class="modal-content" style="max-width:500px;"><div class="modal-header"><h2><svg width="20" height="20" viewBox="0 0 1024 1024" style="margin-right:10px;"><use xlink:href="#icon-attach"></use></svg>Закреплённые</h2><span class="close-modal" onclick="this.closest('.modal').remove()">&times;</span></div><div style="max-height:400px;overflow-y:auto;">${html}</div></div>`;
+            document.body.appendChild(modal);
+            modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+        });
+}
+
+// ========== ПОИСК В ЧАТЕ ==========
+let searchTimeout = null;
+function toggleSearch() {
+    const panel = document.getElementById('searchPanel');
+    const btn = document.getElementById('searchToggleBtn');
+    if (panel.style.display === 'none' || !panel.style.display) {
+        panel.style.display = 'block';
+        if (btn) btn.style.color = 'var(--accent)';
+        document.getElementById('searchInput').focus();
+    } else { closeSearch(); }
+}
+function closeSearch() {
+    const panel = document.getElementById('searchPanel');
+    panel.style.display = 'none';
+    document.getElementById('searchInput').value = '';
+    document.getElementById('searchResults').innerHTML = '';
+    const btn = document.getElementById('searchToggleBtn');
+    if (btn) btn.style.color = '';
+}
+function searchInChat(query) {
+    clearTimeout(searchTimeout);
+    const results = document.getElementById('searchResults');
+    if (!query.trim()) { results.innerHTML = ''; return; }
+    results.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">Поиск...</div>';
+    searchTimeout = setTimeout(() => {
+        fetch(`/search_messages/{{ chat.id }}?q=${encodeURIComponent(query)}`)
+            .then(r => r.json())
+            .then(msgs => {
+                if (msgs.length === 0) { results.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:10px;">Ничего не найдено</div>'; return; }
+                const hi = (t, q) => { if (!t) return ''; return escapeHtml(t).replace(new RegExp(`(${q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')})`, 'gi'), '<mark style="background:var(--accent);color:white;border-radius:3px;padding:0 2px;">$1</mark>'); };
+                let html = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:8px;">Найдено: ${msgs.length}</div>`;
+                msgs.forEach(m => { html += `<div onclick="closeSearch();scrollToMessage(${m.id});" style="padding:10px 14px;border-radius:10px;cursor:pointer;margin-bottom:6px;background:var(--bg-tertiary);" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-tertiary)'"><div style="font-size:12px;color:var(--accent);margin-bottom:3px;">${escapeHtml(m.sender_name)} • ${m.timestamp}</div><div style="font-size:14px;color:var(--text-primary);">${hi(m.content, query)}</div></div>`; });
+                results.innerHTML = html;
+            });
+    }, 400);
+}
+
+// ========== МЕДИАГАЛЕРЕЯ ==========
+function openMediaGallery() {
+    const modal = document.createElement('div');
+    modal.className = 'modal active';
+    modal.id = 'mediaGalleryModal';
+    modal.innerHTML = `<div class="modal-content" style="max-width:600px;max-height:90vh;"><div class="modal-header"><h2><svg width="20" height="20" viewBox="0 0 1024 1024" style="margin-right:10px;"><use xlink:href="#icon-image"></use></svg>Медиагалерея</h2><span class="close-modal" onclick="this.closest('.modal').remove()">&times;</span></div><div style="display:flex;gap:8px;margin-bottom:16px;border-bottom:1px solid var(--border);padding-bottom:12px;"><button class="gallery-tab" id="gtab-images" onclick="switchGalleryTab('images')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--accent);color:white;cursor:pointer;font-weight:600;">Фото</button><button class="gallery-tab" id="gtab-files" onclick="switchGalleryTab('files')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;font-weight:600;">Файлы</button><button class="gallery-tab" id="gtab-links" onclick="switchGalleryTab('links')" style="flex:1;padding:8px;border-radius:8px;border:none;background:var(--bg-tertiary);color:var(--text-primary);cursor:pointer;font-weight:600;">Ссылки</button></div><div id="galleryContent" style="max-height:calc(80vh - 120px);overflow-y:auto;"><div style="color:var(--text-muted);text-align:center;padding:30px;">Загрузка...</div></div></div>`;
+    document.body.appendChild(modal);
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+    window._currentGalleryContextId = {{ chat.id }};
+    window._currentGalleryIsGroup = false;
+    loadGalleryContent('images');
+}
+function switchGalleryTab(type) {
+    ['images','files','links'].forEach(t => {
+        const btn = document.getElementById(`gtab-${t}`);
+        if (btn) { btn.style.background = t === type ? 'var(--accent)' : 'var(--bg-tertiary)'; btn.style.color = t === type ? 'white' : 'var(--text-primary)'; }
+    });
+    loadGalleryContent(type);
+}
+function loadGalleryContent(type) {
+    const content = document.getElementById('galleryContent');
+    if (!content) return;
+    content.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:30px;">Загрузка...</div>';
+    const ctxId = window._currentGalleryContextId || {{ chat.id }};
+    const isGroup = window._currentGalleryIsGroup || false;
+    fetch(`/get_media/${ctxId}?type=${type}&is_group=${isGroup}`)
+        .then(r => r.json())
+        .then(items => {
+            if (items.length === 0) { content.innerHTML = '<div style="color:var(--text-muted);text-align:center;padding:40px;">Ничего нет</div>'; return; }
+            let html = '';
+            if (type === 'images') {
+                html = '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;">';
+                items.forEach(item => { html += `<div style="aspect-ratio:1;overflow:hidden;border-radius:8px;cursor:pointer;background:var(--bg-tertiary);" onclick="openImageModal('${item.url}')" title="${escapeHtml(item.sender_name)} • ${item.timestamp}"><img src="${item.url}" style="width:100%;height:100%;object-fit:cover;transition:transform 0.2s;" onmouseover="this.style.transform='scale(1.05)'" onmouseout="this.style.transform='scale(1)'"></div>`; });
+                html += '</div>';
+            } else if (type === 'files') {
+                items.forEach(item => { html += `<div style="padding:12px;background:var(--bg-tertiary);border-radius:10px;margin-bottom:8px;display:flex;align-items:center;gap:12px;cursor:pointer;" onclick="window.open('${item.url}','_blank')" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-tertiary)'"><span style="font-size:28px;flex-shrink:0;">${item.file_icon}</span><div style="flex:1;min-width:0;"><div style="font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(item.file_name||'Файл')}</div><div style="font-size:12px;color:var(--text-muted);">${item.file_size||''} • ${escapeHtml(item.sender_name)} • ${item.timestamp}</div></div></div>`; });
+            } else if (type === 'links') {
+                items.forEach(item => { html += `<div style="padding:12px;background:var(--bg-tertiary);border-radius:10px;margin-bottom:8px;cursor:pointer;border-left:3px solid var(--accent);" onclick="window.open('${item.url}','_blank')" onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-tertiary)'">${item.image?`<img src="${item.image}" style="width:100%;max-height:120px;object-fit:cover;border-radius:8px;margin-bottom:8px;" onerror="this.remove()">`:''}<div style="font-weight:600;color:var(--text-primary);margin-bottom:4px;">${escapeHtml(item.title||item.url)}</div>${item.description?`<div style="font-size:13px;color:var(--text-secondary);margin-bottom:6px;">${escapeHtml(item.description.substring(0,100))}...</div>`:''}<div style="font-size:12px;color:var(--accent);">${escapeHtml(item.url)}</div><div style="font-size:11px;color:var(--text-muted);margin-top:4px;">${escapeHtml(item.sender_name)} • ${item.timestamp}</div></div>`; });
+            }
+            content.innerHTML = html;
+        });
 }
 
 // Открытие модального окна с изображением
@@ -1504,6 +1736,24 @@ document.querySelectorAll('.modal').forEach(modal => {
             </div>
         </div>
         <div class="chat-actions" style="display: flex; gap: 10px;">
+            <button class="btn-icon" onclick="toggleSearch()" title="Поиск в чате" id="searchToggleBtn">
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-search"></use>
+                </svg>
+            </button>
+            <button class="btn-icon" onclick="openMediaGallery()" title="Медиагалерея">
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-image"></use>
+                </svg>
+            </button>
+            {% if pinned_messages %}
+            <button class="btn-icon" onclick="showPinnedMessages()" title="Закреплённые сообщения" style="position:relative;">
+                <svg width="24" height="24" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-attach"></use>
+                </svg>
+                <span style="position:absolute;top:0;right:0;background:var(--accent);color:white;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;">{{ pinned_messages|length }}</span>
+            </button>
+            {% endif %}
             <button class="btn-icon" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" title="Профиль">
                 <svg width="24" height="24" viewBox="0 0 1024 1024">
                     <use xlink:href="#icon-profile"></use>
@@ -1512,7 +1762,41 @@ document.querySelectorAll('.modal').forEach(modal => {
         </div>
     </header>
 
-    <!-- Контейнер сообщений -->
+    <!-- Поиск в чате -->
+    <div id="searchPanel" style="display:none; padding:10px 20px; background:var(--bg-secondary); border-bottom:1px solid var(--border); flex-shrink:0;">
+        <div style="display:flex; gap:10px; align-items:center; background:var(--bg-tertiary); border-radius:24px; padding:8px 16px;">
+            <svg width="20" height="20" viewBox="0 0 1024 1024" style="color:var(--text-muted); flex-shrink:0;">
+                <use xlink:href="#icon-search"></use>
+            </svg>
+            <input type="text" id="searchInput" placeholder="Поиск по сообщениям..." autocomplete="off"
+                style="flex:1; background:transparent; border:none; color:var(--text-primary); font-size:15px; outline:none;"
+                oninput="searchInChat(this.value)">
+            <button onclick="closeSearch()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:20px; padding:0 4px; line-height:1;">&times;</button>
+        </div>
+        <div id="searchResults" style="margin-top:10px; max-height:300px; overflow-y:auto;"></div>
+    </div>
+
+    <!-- Баннер закреплённого сообщения -->
+    {% if pinned_messages %}
+    <div id="pinnedBanner" onclick="scrollToMessage({{ pinned_messages[0].id }})"
+        style="padding:10px 20px; background:var(--bg-secondary); border-bottom:2px solid var(--accent); cursor:pointer; display:flex; align-items:center; gap:12px; flex-shrink:0; transition:var(--transition);"
+        onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'">
+        <svg width="18" height="18" viewBox="0 0 1024 1024" style="color:var(--accent); flex-shrink:0;">
+            <use xlink:href="#icon-attach"></use>
+        </svg>
+        <div style="flex:1; min-width:0;">
+            <div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:2px;">Закреплённое сообщение</div>
+            <div style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                {% set pm = pinned_messages[0] %}
+                {% if pm.content %}{{ pm.content[:60] }}{% if pm.content|length > 60 %}...{% endif %}
+                {% elif pm.image_path %}📷 Фото
+                {% elif pm.file_path %}📎 {{ pm.file_name }}
+                {% endif %}
+            </div>
+        </div>
+        <button onclick="event.stopPropagation(); hidePinnedBanner()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; flex-shrink:0;">&times;</button>
+    </div>
+    {% endif %}
     <main class="messages-container" id="messagesContainer">
         {% if messages %}
             {% for message in messages %}
@@ -1663,6 +1947,33 @@ document.querySelectorAll('.modal').forEach(modal => {
                                         <use xlink:href="#icon-group"></use>
                                     </svg>
                                 </button>
+                                {% if not message.is_pinned %}
+                                <button class="message-action-btn" onclick="pinMessage({{ message.id }})" title="Закрепить" style="color: var(--accent);">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-attach"></use>
+                                    </svg>
+                                </button>
+                                {% else %}
+                                <button class="message-action-btn" onclick="unpinMessage({{ message.id }})" title="Открепить" style="color: var(--accent); opacity: 0.6;">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-attach"></use>
+                                    </svg>
+                                </button>
+                                {% endif %}
+                                {% if message.sender_id == current_user.id and message.content and not message.is_deleted %}
+                                <button class="message-action-btn" onclick="editMessage({{ message.id }}, this)" title="Редактировать">
+                                    <svg width="20" height="20" viewBox="0 0 24 24">
+                                        <use xlink:href="#icon-edit"></use>
+                                    </svg>
+                                </button>
+                                {% endif %}
+                                {% if message.sender_id == current_user.id and not message.is_deleted %}
+                                <button class="message-action-btn" onclick="deleteMessage({{ message.id }})" title="Удалить" style="color: var(--danger);">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024">
+                                        <use xlink:href="#icon-delete"></use>
+                                    </svg>
+                                </button>
+                                {% endif %}
                             </div>
                         </div>
                     </div>

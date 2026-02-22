@@ -14,6 +14,7 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
+    <!-- SVG Sprite -->
     {% include "svg_sprite.html" %}
     
     {% block content %}{% endblock %}
@@ -21,6 +22,7 @@
     {% block scripts %}
     <script src="{{ url_for('static', filename='js/script.js') }}"></script>
     <script>
+        // Контекстное меню для сообщений
 class MessageContextMenu {
     constructor() {
         this.menu = null;
@@ -29,20 +31,28 @@ class MessageContextMenu {
     }
 
     init() {
+        // Создаем меню
         this.createMenu();
         
+        // Глобальный перехват ПКМ на всей странице
         document.addEventListener('contextmenu', (e) => {
-            e.preventDefault(); 
+            e.preventDefault(); // Всегда отключаем стандартное меню браузера
+            
+            // Проверяем, кликнули ли на сообщение
             const messageElement = e.target.closest('.message');
             if (messageElement) {
+                // Если на сообщении - показываем наше меню
                 this.showMenu(e, messageElement);
             }
+            // Если не на сообщении - ничего не делаем, меню не показывается
         });
 
+        // Глобальный перехват длительного нажатия на мобильных
         let pressTimer;
         let isLongPress = false;
         
         document.addEventListener('touchstart', (e) => {
+            // Проверяем, нажали ли на сообщение
             const messageElement = e.target.closest('.message');
             if (!messageElement) return;
             
@@ -55,6 +65,7 @@ class MessageContextMenu {
 
         document.addEventListener('touchend', (e) => {
             clearTimeout(pressTimer);
+            // Если это было длительное нажатие, отменяем стандартное поведение
             if (isLongPress) {
                 e.preventDefault();
                 isLongPress = false;
@@ -71,20 +82,24 @@ class MessageContextMenu {
             isLongPress = false;
         });
 
+        // Обработчик для закрытия меню
         document.addEventListener('click', (e) => this.hideMenu(e));
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') this.hideMenu();
         });
 
+        // Предотвращаем появление стандартного меню на мобильных после длительного нажатия
         document.addEventListener('contextmenu', (e) => {
             e.preventDefault();
         });
     }
 
     createMenu() {
+        // Удаляем существующее меню, если есть
         const existingMenu = document.getElementById('messageContextMenu');
         if (existingMenu) existingMenu.remove();
 
+        // Создаем новое меню
         this.menu = document.createElement('div');
         this.menu.id = 'messageContextMenu';
         this.menu.className = 'context-menu';
@@ -131,6 +146,7 @@ class MessageContextMenu {
 
         document.body.appendChild(this.menu);
 
+        // Добавляем обработчики для пунктов меню
         this.menu.querySelectorAll('.context-menu-item').forEach(item => {
             item.addEventListener('click', (e) => {
                 e.stopPropagation();
@@ -141,19 +157,24 @@ class MessageContextMenu {
     }
 
     showMenu(event, messageElement) {
+        // Скрываем предыдущее меню
         this.hideMenu();
 
+        // Получаем ID сообщения
         this.currentMessageId = messageElement.dataset.messageId;
         
+        // Определяем тип сообщения (текст, файл, изображение)
         const hasFile = messageElement.querySelector('.file-message');
         const hasImage = messageElement.querySelector('.message-image');
         const hasText = messageElement.querySelector('.message-content p, .message-content');
 
+        // Показываем/скрываем соответствующие пункты меню
         const copyItem = this.menu.querySelector('[data-action="copy"]');
         const downloadItem = this.menu.querySelector('[data-action="download"]');
         const fileDivider = this.menu.querySelector('#fileDivider');
 
         if (copyItem) {
+            // Проверяем наличие текста в сообщении
             const textContent = this.getMessageText(messageElement);
             copyItem.style.display = textContent ? 'flex' : 'none';
         }
@@ -164,16 +185,20 @@ class MessageContextMenu {
             fileDivider.style.display = showFileOptions ? 'block' : 'none';
         }
 
+        // Позиционируем меню
         let x, y;
 
         if (event.touches) {
+            // Для touch событий
             x = event.touches[0].clientX;
             y = event.touches[0].clientY;
         } else {
+            // Для mouse событий
             x = event.clientX;
             y = event.clientY;
         }
 
+        // Проверяем границы экрана
         const menuWidth = this.menu.offsetWidth;
         const menuHeight = this.menu.offsetHeight;
         const windowWidth = window.innerWidth;
@@ -191,15 +216,20 @@ class MessageContextMenu {
         this.menu.classList.add('active');
     }
 
+    // Вспомогательная функция для получения текста сообщения
     getMessageText(messageElement) {
+        // Ищем текст в разных возможных местах
         const textParagraph = messageElement.querySelector('.message-content p');
         if (textParagraph && textParagraph.textContent.trim()) {
             return textParagraph.textContent.trim();
         }
         
+        // Если нет отдельного p, ищем прямой текст в message-content
         const contentDiv = messageElement.querySelector('.message-content');
         if (contentDiv) {
+            // Клонируем, чтобы убрать вложенные элементы
             const clone = contentDiv.cloneNode(true);
+            // Удаляем изображения и файлы из клона
             clone.querySelectorAll('img, .file-message, svg').forEach(el => el.remove());
             const text = clone.textContent.trim();
             if (text) return text;
@@ -249,6 +279,7 @@ class MessageContextMenu {
         const text = this.getMessageText(message);
         
         if (text) {
+            // Используем современный Clipboard API
             if (navigator.clipboard && navigator.clipboard.writeText) {
                 navigator.clipboard.writeText(text).then(() => {
                     this.showNotification('Текст скопирован', 'success');
@@ -257,6 +288,7 @@ class MessageContextMenu {
                     this.fallbackCopy(text);
                 });
             } else {
+                // Fallback для старых браузеров
                 this.fallbackCopy(text);
             }
         } else {
@@ -264,6 +296,7 @@ class MessageContextMenu {
         }
     }
 
+    // Запасной метод копирования для старых браузеров
     fallbackCopy(text) {
         try {
             const textarea = document.createElement('textarea');
@@ -293,6 +326,7 @@ class MessageContextMenu {
         const image = message.querySelector('.message-image');
         
         if (fileMessage) {
+            // Для файлов
             const onclickAttr = fileMessage.getAttribute('onclick');
             if (onclickAttr) {
                 const match = onclickAttr.match(/'([^']+)'/g);
@@ -310,6 +344,7 @@ class MessageContextMenu {
                 }
             }
         } else if (image) {
+            // Для изображений
             const imgSrc = image.src;
             const link = document.createElement('a');
             link.href = imgSrc;
@@ -322,14 +357,17 @@ class MessageContextMenu {
     }
 
     selectMessage(message) {
+        // Добавляем класс выделения
         message.classList.toggle('selected');
         
+        // Показываем панель с действиями для выбранных сообщений
         this.showSelectionToolbar();
     }
 
     showSelectionToolbar() {
         const selectedMessages = document.querySelectorAll('.message.selected');
         
+        // Удаляем существующую панель, если есть
         const existingToolbar = document.getElementById('selectionToolbar');
         if (existingToolbar) existingToolbar.remove();
 
@@ -375,6 +413,7 @@ class MessageContextMenu {
         if (typeof window.showNotification === 'function') {
             window.showNotification(message, type);
         } else {
+            // Создаем временное уведомление, если функция не определена
             const notification = document.createElement('div');
             notification.className = `notification ${type}`;
             notification.textContent = message;
@@ -399,6 +438,7 @@ class MessageContextMenu {
     }
 }
 
+// Функции для работы с выделенными сообщениями
 function forwardSelected() {
     const selectedMessages = document.querySelectorAll('.message.selected');
     if (selectedMessages.length === 1) {
@@ -431,6 +471,7 @@ function clearSelection() {
     if (toolbar) toolbar.remove();
 }
 
+// Добавляем SVG иконки
 function addContextMenuIcons() {
     const svgSprites = document.querySelector('svg[style="display: none;"]');
     if (svgSprites) {
@@ -448,6 +489,7 @@ function addContextMenuIcons() {
     }
 }
 
+// Добавляем стили
 function addContextMenuStyles() {
     const style = document.createElement('style');
     style.textContent = `
@@ -568,6 +610,7 @@ function addContextMenuStyles() {
     document.head.appendChild(style);
 }
 
+// Инициализация при загрузке страницы
 document.addEventListener('DOMContentLoaded', () => {
     addContextMenuIcons();
     addContextMenuStyles();
