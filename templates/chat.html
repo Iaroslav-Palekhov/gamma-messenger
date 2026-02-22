@@ -1280,25 +1280,44 @@ function refreshPinnedBanner() {
     fetch(`/get_pinned_messages/{{ chat.id }}`)
         .then(r => r.json())
         .then(pinned => {
+            const btn = document.getElementById('pinnedBtn');
+            const countEl = document.getElementById('pinnedCount');
             let banner = document.getElementById('pinnedBanner');
-            if (pinned.length === 0) { if (banner) banner.remove(); return; }
+
+            if (pinned.length === 0) {
+                if (banner) banner.remove();
+                if (btn) btn.style.display = 'none';
+                return;
+            }
+
+            // Показываем кнопку с актуальным счётчиком
+            if (btn) {
+                btn.style.display = '';
+                if (countEl) countEl.textContent = pinned.length;
+            }
+
             const p = pinned[0];
             const preview = p.content ? (p.content.length > 60 ? p.content.substring(0, 60) + '...' : p.content) : p.has_image ? '📷 Фото' : p.has_file ? `📎 ${p.file_name || 'Файл'}` : '';
             if (banner) {
-                banner.querySelector('[data-preview]').textContent = preview;
+                const previewEl = banner.querySelector('[data-preview]');
+                if (previewEl) previewEl.textContent = preview;
+                banner.style.display = 'flex';
                 banner.onclick = (e) => { if (!e.target.closest('button')) scrollToMessage(p.id); };
             } else {
                 banner = document.createElement('div');
                 banner.id = 'pinnedBanner';
                 banner.style.cssText = 'padding:10px 20px; background:var(--bg-secondary); border-bottom:2px solid var(--accent); cursor:pointer; display:flex; align-items:center; gap:12px; flex-shrink:0;';
                 banner.onclick = (e) => { if (!e.target.closest('button')) scrollToMessage(p.id); };
-                banner.innerHTML = `<svg width="18" height="18" viewBox="0 0 1024 1024" style="color:var(--accent); flex-shrink:0;"><use xlink:href="#icon-attach"></use></svg><div style="flex:1; min-width:0;"><div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:2px;">Закреплённое сообщение</div><div data-preview style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(preview)}</div></div><button onclick="hidePinnedBanner()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; flex-shrink:0;">&times;</button>`;
+                banner.innerHTML = `<svg width="18" height="18" viewBox="0 0 1024 1024" style="color:var(--accent); flex-shrink:0;"><use xlink:href="#icon-attach"></use></svg><div style="flex:1; min-width:0;"><div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:2px;">Закреплённое сообщение</div><div data-preview style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${escapeHtml(preview)}</div></div><button onclick="event.stopPropagation(); hidePinnedBanner()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; flex-shrink:0;">&times;</button>`;
                 const msgs = document.getElementById('messagesContainer');
                 msgs.parentElement.insertBefore(banner, msgs);
             }
         });
 }
-function hidePinnedBanner() { const b = document.getElementById('pinnedBanner'); if (b) b.style.display = 'none'; }
+function hidePinnedBanner() {
+    const b = document.getElementById('pinnedBanner');
+    if (b) b.style.display = 'none';
+}
 function showPinnedMessages() {
     fetch(`/get_pinned_messages/{{ chat.id }}`)
         .then(r => r.json())
@@ -1705,6 +1724,73 @@ document.querySelectorAll('.modal').forEach(modal => {
         }
     });
 });
+
+// ============ HEARTBEAT (онлайн-статус) ============
+const OTHER_USER_ID = {{ other_user.id }};
+const CHAT_ID = {{ chat.id }};
+
+function sendHeartbeat() {
+    if (document.visibilityState === 'visible') {
+        fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
+    }
+}
+
+// Отправляем heartbeat сразу и каждые 20 секунд пока вкладка открыта
+sendHeartbeat();
+setInterval(sendHeartbeat, 20000);
+
+// Если вкладка скрыта/показана — сразу обновляем
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') {
+        sendHeartbeat();
+    }
+});
+
+// Обновляем статус собеседника каждые 5 секунд
+function pollOtherUserStatus() {
+    fetch(`/api/user_status/${OTHER_USER_ID}?chat_id=${CHAT_ID}`)
+        .then(r => r.json())
+        .then(data => {
+            const dot = document.getElementById('userStatusDot');
+            const text = document.getElementById('userStatusText');
+            if (!dot || !text) return;
+
+            if (data.is_typing) {
+                dot.className = 'status online';
+                text.innerHTML = '<span class="status online"></span> <em style="color:var(--accent);">печатает...</em>';
+            } else if (data.status === 'online') {
+                dot.className = 'status online';
+                text.innerHTML = '<span class="status online"></span> Онлайн';
+            } else {
+                dot.className = 'status offline';
+                const lastSeen = data.last_seen ? `Был(а) ${data.last_seen}` : 'давно';
+                text.innerHTML = `<span class="status offline"></span> ${lastSeen}`;
+            }
+        })
+        .catch(() => {});
+}
+
+setInterval(pollOtherUserStatus, 5000);
+
+// ============ TYPING INDICATOR ============
+let typingTimeout = null;
+let lastTypingSent = 0;
+
+const messageInputEl = document.getElementById('messageInput');
+if (messageInputEl) {
+    messageInputEl.addEventListener('input', () => {
+        const now = Date.now();
+        // Шлём не чаще раза в 2 секунды
+        if (now - lastTypingSent > 2000) {
+            lastTypingSent = now;
+            fetch('/api/typing', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ chat_id: CHAT_ID })
+            }).catch(() => {});
+        }
+    });
+}
 </script>
 
 <div class="chat-container">
@@ -1722,11 +1808,12 @@ document.querySelectorAll('.modal').forEach(modal => {
                     class="avatar"
                     onerror="this.src='{{ url_for('static', filename='uploads/avatars/default.png') }}'">
                 <span class="status {{ other_user.status if other_user.status else 'offline' }}"
+                    id="userStatusDot"
                     style="position: absolute; bottom: 0; right: 0; width: 12px; height: 12px;"></span>
             </div>
             <div class="chat-user-details" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" style="cursor: pointer;">
                 <h2>{{ other_user.username if other_user.username else other_user.email.split('@')[0] }}</h2>
-                <p>
+                <p id="userStatusText">
                     {% if other_user.status == 'online' %}
                         <span class="status online"></span> Онлайн
                     {% else %}
@@ -1746,14 +1833,12 @@ document.querySelectorAll('.modal').forEach(modal => {
                     <use xlink:href="#icon-image"></use>
                 </svg>
             </button>
-            {% if pinned_messages %}
-            <button class="btn-icon" onclick="showPinnedMessages()" title="Закреплённые сообщения" style="position:relative;">
+            <button class="btn-icon" id="pinnedBtn" onclick="showPinnedMessages()" title="Закреплённые сообщения" style="position:relative; {% if not pinned_messages %}display:none;{% endif %}">
                 <svg width="24" height="24" viewBox="0 0 1024 1024">
                     <use xlink:href="#icon-attach"></use>
                 </svg>
-                <span style="position:absolute;top:0;right:0;background:var(--accent);color:white;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;">{{ pinned_messages|length }}</span>
+                <span id="pinnedCount" style="position:absolute;top:0;right:0;background:var(--accent);color:white;border-radius:50%;width:16px;height:16px;font-size:10px;display:flex;align-items:center;justify-content:center;">{{ pinned_messages|length if pinned_messages else 0 }}</span>
             </button>
-            {% endif %}
             <button class="btn-icon" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" title="Профиль">
                 <svg width="24" height="24" viewBox="0 0 1024 1024">
                     <use xlink:href="#icon-profile"></use>
@@ -1778,15 +1863,19 @@ document.querySelectorAll('.modal').forEach(modal => {
 
     <!-- Баннер закреплённого сообщения -->
     {% if pinned_messages %}
-    <div id="pinnedBanner" onclick="scrollToMessage({{ pinned_messages[0].id }})"
+    <div id="pinnedBanner"
         style="padding:10px 20px; background:var(--bg-secondary); border-bottom:2px solid var(--accent); cursor:pointer; display:flex; align-items:center; gap:12px; flex-shrink:0; transition:var(--transition);"
-        onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'">
+        onmouseover="this.style.background='var(--bg-hover)'" onmouseout="this.style.background='var(--bg-secondary)'"
+        onclick="if(!event.target.closest('button')) scrollToMessage({{ pinned_messages[0].id }})">
         <svg width="18" height="18" viewBox="0 0 1024 1024" style="color:var(--accent); flex-shrink:0;">
             <use xlink:href="#icon-attach"></use>
         </svg>
         <div style="flex:1; min-width:0;">
-            <div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:2px;">Закреплённое сообщение</div>
-            <div style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            <div style="font-size:11px; color:var(--accent); font-weight:600; margin-bottom:2px;">
+                Закреплённое сообщение
+                {% if pinned_messages|length > 1 %} ({{ pinned_messages|length }}){% endif %}
+            </div>
+            <div data-preview style="font-size:13px; color:var(--text-secondary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
                 {% set pm = pinned_messages[0] %}
                 {% if pm.content %}{{ pm.content[:60] }}{% if pm.content|length > 60 %}...{% endif %}
                 {% elif pm.image_path %}📷 Фото
@@ -1794,6 +1883,7 @@ document.querySelectorAll('.modal').forEach(modal => {
                 {% endif %}
             </div>
         </div>
+        <button onclick="event.stopPropagation(); showPinnedMessages()" title="Все закреплённые" style="background:transparent; border:none; color:var(--accent); cursor:pointer; font-size:12px; padding:4px 8px; flex-shrink:0; border-radius:6px; font-weight:600;">Все</button>
         <button onclick="event.stopPropagation(); hidePinnedBanner()" style="background:transparent; border:none; color:var(--text-muted); cursor:pointer; font-size:18px; padding:4px; flex-shrink:0;">&times;</button>
     </div>
     {% endif %}
@@ -2063,4 +2153,3 @@ document.querySelectorAll('.modal').forEach(modal => {
     </symbol>
 </svg>
 {% endblock %}
-

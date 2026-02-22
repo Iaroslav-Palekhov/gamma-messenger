@@ -178,7 +178,13 @@ def register_routes(app, db, login_manager):
             msg.is_read = True
 
         db.session.commit()
-        return render_template('chat.html', chat=chat_obj, messages=messages, other_user=other_user)
+
+        pinned_messages = Message.query.filter_by(
+            chat_id=chat_id, is_pinned=True, is_deleted=False
+        ).order_by(Message.pinned_at.desc()).all()
+
+        return render_template('chat.html', chat=chat_obj, messages=messages,
+                               other_user=other_user, pinned_messages=pinned_messages)
 
     @app.route('/chat/<int:chat_id>/delete', methods=['POST'])
     @login_required
@@ -282,9 +288,9 @@ def register_routes(app, db, login_manager):
             })
 
         chats_data.sort(key=lambda x: x['last_message_time'] or '', reverse=True)
-    
+
         total_unread = sum(c['unread_count'] for c in chats_data)
-    
+
         return jsonify({
             'chats': chats_data,
             'total_unread': total_unread
@@ -415,7 +421,13 @@ def register_routes(app, db, login_manager):
             msg.is_read = True
 
         db.session.commit()
-        return render_template('group_chat.html', group=group, messages=messages, membership=membership)
+
+        pinned_messages = Message.query.filter_by(
+            group_id=group_id, is_pinned=True, is_deleted=False
+        ).order_by(Message.pinned_at.desc()).all()
+
+        return render_template('group_chat.html', group=group, messages=messages,
+                               membership=membership, pinned_messages=pinned_messages)
 
     @app.route('/group/<int:group_id>/members')
     @login_required
@@ -624,7 +636,7 @@ def register_routes(app, db, login_manager):
                 # Берем первый URL для превью
                 first_url = urls[0]
                 preview_data = extract_link_preview(first_url)
-                
+
                 if preview_data:
                     message.link_url = preview_data['url']
                     message.link_title = preview_data['title']
@@ -684,7 +696,7 @@ def register_routes(app, db, login_manager):
 
         return jsonify({
             'success': True,
-            'message_id': message.id, 
+            'message_id': message.id,
             'timestamp': message.timestamp.strftime('%H:%M'),
             'content': message.content,
             'image_path': url_for('download_file', filepath=message.image_path) if message.image_path else None,
