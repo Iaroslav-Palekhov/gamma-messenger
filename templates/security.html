@@ -357,17 +357,16 @@
     </div>
 
     <!-- Статистика -->
-    {% set active_count = sessions | selectattr('is_active') | list | length %}
-    {% set total_count  = sessions | length %}
+    {% set active_count = sessions | length %}
     <div class="section" style="padding-top: 16px;">
         <div class="stats-row" style="padding: 0; margin-bottom: 0;">
             <div class="stat-box">
-                <div class="stat-box-value">{{ active_count }}</div>
+                <div class="stat-box-value" id="activeCountVal">{{ active_count }}</div>
                 <div class="stat-box-label">Активных сессий</div>
             </div>
             <div class="stat-box">
-                <div class="stat-box-value">{{ total_count }}</div>
-                <div class="stat-box-label">Всего входов</div>
+                <div class="stat-box-value">{{ current_user.created_at.strftime('%d.%m') }}</div>
+                <div class="stat-box-label">Дата регистрации</div>
             </div>
             <div class="stat-box">
                 <div class="stat-box-value">{{ current_user.created_at.strftime('%Y') }}</div>
@@ -429,7 +428,7 @@
         <div class="section-card" id="sessionsList">
             {% if sessions %}
                 {% for s in sessions %}
-                <div class="session-item {% if s.is_current %}current-session{% endif %} {% if not s.is_active %}session-inactive{% endif %}"
+                <div class="session-item {% if s.is_current %}current-session{% endif %}"
                      id="session-{{ s.id }}">
 
                     <!-- Иконка устройства -->
@@ -464,13 +463,7 @@
                         <div class="session-meta">
                             <span>{{ s.os or 'ОС неизвестна' }}</span>
                             <span>IP: {{ s.ip_address or '—' }}</span>
-                            <span>
-                                {% if s.is_active %}
-                                    🟢 Активна · последняя активность {{ s.last_active_str() }}
-                                {% else %}
-                                    ⚪ Завершена {{ s.ended_at.strftime('%d.%m.%Y %H:%M') if s.ended_at else '' }}
-                                {% endif %}
-                            </span>
+                            <span>🟢 Активна · последняя активность {{ s.last_active_str() }}</span>
                             <span>Вход: {{ s.created_at.strftime('%d.%m.%Y %H:%M') }}</span>
                         </div>
                     </div>
@@ -690,12 +683,9 @@ function updateTerminateAllBtn() {
 }
 
 function updateActiveCount() {
-    const activeItems = document.querySelectorAll('.session-item').length;
-    // Обновляем счётчик активных сессий в статистике
-    const statBoxes = document.querySelectorAll('.stat-box-value');
-    if (statBoxes[0]) {
-        const nonCurrentActive = document.querySelectorAll('.session-item:not(.current-session)').length;
-        statBoxes[0].textContent = nonCurrentActive + 1; // +1 за текущую
+    const el = document.getElementById('activeCountVal');
+    if (el) {
+        el.textContent = document.querySelectorAll('.session-item').length;
     }
 }
 </script>
