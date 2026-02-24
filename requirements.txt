@@ -15,3 +15,4 @@ Werkzeug
 bs4
 requests
 cryptography
+user-agents

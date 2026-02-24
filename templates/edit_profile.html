@@ -3,98 +3,301 @@
 {% block title %}Редактирование профиля - Мессенджер{% endblock %}
 
 {% block content %}
-<div class="auth-container" style="max-width: 500px;">
-    <div class="logo">
-        <div class="logo-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24">
-                <use xlink:href="#icon-edit"></use>
-            </svg>
-        </div>
-        <h1>Редактировать профиль</h1>
-    </div>
+<style>
+    /* Скрываем стандартный лейаут */
+    .app-container, .sidebar, .main-content {
+        display: none;
+    }
 
-    <form id="profileForm" enctype="multipart/form-data">
-        <div style="text-align: center; margin-bottom: 30px;">
-            <div class="profile-avatar" style="display: inline-block; position: relative;">
-                <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
-                     alt="Avatar"
-                     id="avatarPreview"
-                     style="width: 120px; height: 120px; border-radius: 50%; object-fit: cover; border: 4px solid var(--accent);">
-                <label for="avatarInput" style="position: absolute; bottom: 0; right: 0; background: var(--accent); border-radius: 50%; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; cursor: pointer;">
-                    <svg width="20" height="20" viewBox="0 0 24 24" style="color: white;">
-                        <use xlink:href="#icon-edit"></use>
-                    </svg>
-                </label>
-            </div>
-        </div>
+    .edit-profile-page {
+        min-height: 100vh;
+        background: var(--bg-primary);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 20px 16px 40px;
+    }
 
-        <div class="form-group">
-            <label>Аватар</label>
-            <input type="file" name="avatar" id="avatarInput" accept="image/*" style="display: none;">
-            <small style="color: var(--text-muted); display: block; margin-top: 5px;">
-                Рекомендуемый размер: 500x500px
-            </small>
-        </div>
+    .edit-profile-card {
+        background: var(--bg-secondary);
+        border-radius: 20px;
+        padding: 32px 28px;
+        width: 100%;
+        max-width: 480px;
+    }
 
-        <div class="form-group">
-            <label>Имя пользователя</label>
-            <input type="text" name="username" value="{{ current_user.username }}" required>
-        </div>
+    .edit-profile-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        margin-bottom: 28px;
+    }
 
-        <div class="form-group">
-            <label>О себе</label>
-            <textarea name="bio" placeholder="Расскажите немного о себе...">{{ current_user.bio }}</textarea>
-        </div>
+    .back-btn {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--bg-tertiary);
+        border: none;
+        color: var(--text-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        text-decoration: none;
+        flex-shrink: 0;
+        transition: background 0.2s;
+    }
 
-        <div class="form-actions" style="display: flex; gap: 10px; margin-top: 20px;">
-            <button type="submit" class="btn btn-primary" style="flex: 1;">
-                <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
-                    <use xlink:href="#icon-check"></use>
+    .back-btn:hover {
+        background: var(--bg-hover);
+    }
+
+    .edit-profile-header h1 {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin: 0;
+    }
+
+    /* Аватар */
+    .avatar-section {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 28px;
+    }
+
+    .avatar-wrapper {
+        position: relative;
+        display: inline-block;
+    }
+
+    .avatar-wrapper img {
+        width: 100px;
+        height: 100px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid var(--accent);
+        display: block;
+    }
+
+    .avatar-edit-label {
+        position: absolute;
+        bottom: 2px;
+        right: 2px;
+        background: var(--accent);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+        transition: transform 0.2s;
+    }
+
+    .avatar-edit-label:hover {
+        transform: scale(1.1);
+    }
+
+    .avatar-hint {
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    /* Форм-группы */
+    .form-group {
+        margin-bottom: 18px;
+    }
+
+    .form-group label {
+        display: block;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+        margin-bottom: 8px;
+    }
+
+    .form-group input[type="text"],
+    .form-group textarea {
+        width: 100%;
+        padding: 14px 16px;
+        background: var(--bg-tertiary);
+        border: 1.5px solid var(--border);
+        border-radius: 14px;
+        color: var(--text-primary);
+        font-size: 15px;
+        transition: border-color 0.2s;
+        box-sizing: border-box;
+        font-family: inherit;
+    }
+
+    .form-group input[type="text"]:focus,
+    .form-group textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+
+    .form-group textarea {
+        resize: vertical;
+        min-height: 100px;
+    }
+
+    /* Кнопки */
+    .form-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 24px;
+    }
+
+    .btn {
+        flex: 1;
+        padding: 14px 16px;
+        border-radius: 14px;
+        font-size: 15px;
+        font-weight: 600;
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        text-decoration: none;
+        transition: opacity 0.2s, transform 0.15s;
+    }
+
+    .btn:active {
+        transform: scale(0.97);
+    }
+
+    .btn-primary {
+        background: var(--accent);
+        color: #fff;
+    }
+
+    .btn-primary:hover {
+        opacity: 0.9;
+    }
+
+    .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-hover);
+    }
+
+    /* Мобильная адаптация */
+    @media (max-width: 520px) {
+        .edit-profile-page {
+            padding: 0;
+            align-items: stretch;
+        }
+
+        .edit-profile-card {
+            border-radius: 0;
+            min-height: 100vh;
+            padding: 20px 16px 32px;
+        }
+    }
+</style>
+
+<div class="edit-profile-page">
+    <div class="edit-profile-card">
+
+        <div class="edit-profile-header">
+            <a href="{{ url_for('profile', user_id=current_user.id) }}" class="back-btn" title="Назад">
+                <svg width="22" height="22" viewBox="0 0 1024 1024">
+                    <use xlink:href="#icon-back"></use>
                 </svg>
-                Сохранить
-            </button>
-            <a href="{{ url_for('profile', user_id=current_user.id) }}" class="btn btn-secondary" style="flex: 1;">
-                <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
-                    <use xlink:href="#icon-delete"></use>
-                </svg>
-                Отмена
             </a>
+            <h1>Редактировать профиль</h1>
         </div>
-    </form>
+
+        <form id="profileForm" enctype="multipart/form-data">
+            <!-- Аватар -->
+            <div class="avatar-section">
+                <div class="avatar-wrapper">
+                    <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
+                         alt="Avatar"
+                         id="avatarPreview">
+                    <label for="avatarInput" class="avatar-edit-label">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                    </label>
+                    <input type="file" name="avatar" id="avatarInput" accept="image/*" style="display:none;">
+                </div>
+                <p class="avatar-hint">Рекомендуемый размер: 500×500px</p>
+            </div>
+
+            <!-- Имя -->
+            <div class="form-group">
+                <label>Имя пользователя</label>
+                <input type="text" name="username" value="{{ current_user.username }}" required>
+            </div>
+
+            <!-- Био -->
+            <div class="form-group">
+                <label>О себе</label>
+                <textarea name="bio" placeholder="Расскажите немного о себе...">{{ current_user.bio }}</textarea>
+            </div>
+
+            <!-- Кнопки -->
+            <div class="form-actions">
+                <button type="submit" class="btn btn-primary">
+                    <svg width="18" height="18" viewBox="0 0 1024 1024">
+                        <use xlink:href="#icon-check"></use>
+                    </svg>
+                    Сохранить
+                </button>
+                <a href="{{ url_for('profile', user_id=current_user.id) }}" class="btn btn-secondary">
+                    Отмена
+                </a>
+            </div>
+        </form>
+
+    </div>
 </div>
 
 <script>
-    document.getElementById('avatarInput').addEventListener('change', function(e) {
+    // Предпросмотр аватара
+    document.getElementById('avatarInput').addEventListener('change', function() {
         if (this.files && this.files[0]) {
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = e => {
                 document.getElementById('avatarPreview').src = e.target.result;
             };
             reader.readAsDataURL(this.files[0]);
         }
     });
 
+    // Сохранение профиля
     document.getElementById('profileForm').addEventListener('submit', function(e) {
         e.preventDefault();
-
         const formData = new FormData(this);
 
         fetch('{{ url_for("edit_profile") }}', {
             method: 'POST',
             body: formData
         })
-        .then(response => response.json())
+        .then(r => r.json())
         .then(data => {
             if (data.success) {
+                // После сохранения — на профиль, не назад в edit
                 window.location.href = '{{ url_for("profile", user_id=current_user.id) }}';
             } else {
                 alert(data.error || 'Ошибка при сохранении');
             }
         })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Ошибка при сохранении');
-        });
+        .catch(() => alert('Ошибка при сохранении'));
     });
 </script>
 {% endblock %}

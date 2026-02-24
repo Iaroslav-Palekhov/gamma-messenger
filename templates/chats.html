@@ -5,7 +5,6 @@
 {% block content %}
 <div class="chats-fullscreen">
     <style>
-    /* Стили для chats.html */
     * {
         margin: 0;
         padding: 0;
@@ -37,88 +36,174 @@
         bottom: 0;
     }
 
+    /* =====================
+       ШАПКА
+    ===================== */
     .chats-header {
-        padding: 15px 20px;
+        padding: 12px 16px;
         background: var(--bg-secondary);
         display: flex;
         justify-content: space-between;
         align-items: center;
         border-bottom: 1px solid var(--border);
         flex-shrink: 0;
+        height: 56px;
     }
 
-    .user-info {
+    .header-left {
         display: flex;
         align-items: center;
-        gap: 12px;
+        gap: 14px;
     }
 
-    .avatar {
-        width: 45px;
-        height: 45px;
-        border-radius: 50%;
-        object-fit: cover;
-        border: 2px solid var(--accent);
-    }
-
-    .user-details h3 {
-        font-size: 16px;
-        font-weight: 600;
-        color: var(--text-primary);
-    }
-
-    .user-details p {
-        font-size: 13px;
-        color: var(--text-secondary);
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .status {
-        display: inline-block;
-        width: 10px;
-        height: 10px;
-        border-radius: 50%;
-    }
-
-    .status.online {
-        background: var(--success);
-    }
-
-    .status.offline {
-        background: var(--text-muted);
-    }
-
-    .header-actions {
-        display: flex;
-        gap: 10px;
-    }
-
-    .btn-icon {
+    .burger-btn {
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background: var(--bg-tertiary);
+        background: transparent;
         border: none;
         color: var(--text-primary);
-        font-size: 20px;
         cursor: pointer;
-        transition: var(--transition);
         display: flex;
         align-items: center;
         justify-content: center;
-        text-decoration: none;
+        flex-direction: column;
+        gap: 5px;
+        transition: background 0.2s;
+        flex-shrink: 0;
     }
 
-    .btn-icon:hover {
+    .burger-btn:hover {
+        background: var(--bg-tertiary);
+    }
+
+    .burger-btn span {
+        display: block;
+        width: 20px;
+        height: 2px;
+        background: var(--text-primary);
+        border-radius: 2px;
+        transition: all 0.3s ease;
+    }
+
+    .header-title {
+        font-size: 20px;
+        font-weight: 700;
+        color: var(--text-primary);
+    }
+
+    /* =====================
+       БОКОВОЕ МЕНЮ (DRAWER)
+    ===================== */
+    .drawer-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 3000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+
+    .drawer-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+
+    .drawer {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 280px;
+        height: 100%;
+        background: var(--bg-secondary);
+        z-index: 3100;
+        transform: translateX(-100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+    }
+
+    .drawer.active {
+        transform: translateX(0);
+    }
+
+    .drawer-profile {
+        padding: 30px 20px 24px;
+        background: var(--accent);
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        flex-shrink: 0;
+    }
+
+    .drawer-avatar {
+        width: 60px;
+        height: 60px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .drawer-username {
+        font-size: 17px;
+        font-weight: 700;
+        color: #fff;
+    }
+
+    .drawer-status {
+        font-size: 13px;
+        color: rgba(255,255,255,0.75);
+    }
+
+    .drawer-menu {
+        flex: 1;
+        padding: 10px 0;
+        overflow-y: auto;
+    }
+
+    .drawer-menu-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 20px;
+        cursor: pointer;
+        transition: background 0.15s;
+        text-decoration: none;
+        color: var(--text-primary);
+        font-size: 15px;
+        border: none;
+        background: transparent;
+        width: 100%;
+        text-align: left;
+    }
+
+    .drawer-menu-item:hover {
         background: var(--bg-hover);
     }
 
+    .drawer-menu-item svg {
+        opacity: 0.7;
+        flex-shrink: 0;
+    }
+
+    .drawer-divider {
+        height: 1px;
+        background: var(--border);
+        margin: 8px 0;
+    }
+
+    /* =====================
+       ПОИСК
+    ===================== */
     .search-bar {
-        padding: 10px 15px;
+        padding: 8px 14px;
         background: var(--bg-tertiary);
-        margin: 10px 15px;
+        margin: 10px 12px;
         border-radius: 24px;
         display: flex;
         align-items: center;
@@ -146,39 +231,9 @@
         outline: none;
     }
 
-    .action-buttons {
-        display: flex;
-        padding: 0 15px 10px;
-        gap: 10px;
-        flex-shrink: 0;
-    }
-
-    .btn {
-        padding: 12px 16px;
-        background: var(--accent);
-        color: white;
-        border: none;
-        border-radius: 12px;
-        font-size: 14px;
-        font-weight: 600;
-        cursor: pointer;
-        transition: var(--transition);
-    }
-
-    .btn-secondary {
-        background: var(--bg-tertiary);
-        color: var(--text-primary);
-    }
-
-    .btn-secondary:hover {
-        background: var(--bg-hover);
-    }
-
-    .btn-sm {
-        padding: 10px 12px;
-        font-size: 13px;
-    }
-
+    /* =====================
+       ЗАГОЛОВОК СПИСКА
+    ===================== */
     .chats-title {
         padding: 0 15px 10px;
         border-bottom: 1px solid var(--border);
@@ -193,6 +248,9 @@
         display: inline-block;
     }
 
+    /* =====================
+       СПИСОК ЧАТОВ
+    ===================== */
     .chats-list {
         flex: 1;
         overflow-y: auto;
@@ -244,8 +302,12 @@
         right: 0;
         width: 12px;
         height: 12px;
+        border-radius: 50%;
         border: 2px solid var(--bg-tertiary);
     }
+
+    .status.online { background: var(--success); }
+    .status.offline { background: var(--text-muted); }
 
     .unread-badge {
         position: absolute;
@@ -368,7 +430,149 @@
         color: var(--text-primary);
     }
 
-    /* Модальные окна */
+    /* =====================
+       FAB - КНОПКА КАРАНДАШ
+    ===================== */
+    .fab-btn {
+        position: fixed;
+        bottom: 24px;
+        right: 20px;
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: var(--accent);
+        border: none;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 4px 16px rgba(0,0,0,0.35);
+        z-index: 500;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        color: #fff;
+    }
+
+    .fab-btn:hover {
+        transform: scale(1.08);
+        box-shadow: 0 6px 22px rgba(0,0,0,0.4);
+    }
+
+    .fab-btn:active {
+        transform: scale(0.95);
+    }
+
+    /* =====================
+       BOTTOM SHEET (ЧТО СОЗДАТЬ)
+    ===================== */
+    .sheet-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0,0,0,0.5);
+        z-index: 1000;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.3s ease;
+    }
+
+    .sheet-overlay.active {
+        opacity: 1;
+        pointer-events: all;
+    }
+
+    .bottom-sheet {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--bg-secondary);
+        border-radius: 20px 20px 0 0;
+        z-index: 1100;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        padding-bottom: env(safe-area-inset-bottom);
+    }
+
+    .bottom-sheet.active {
+        transform: translateY(0);
+    }
+
+    .sheet-handle {
+        width: 36px;
+        height: 4px;
+        background: var(--border);
+        border-radius: 2px;
+        margin: 10px auto 0;
+    }
+
+    .sheet-title {
+        padding: 16px 20px 8px;
+        font-size: 13px;
+        font-weight: 600;
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+
+    .sheet-items {
+        padding: 0 8px 16px;
+    }
+
+    .sheet-item {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 14px 16px;
+        border-radius: 12px;
+        cursor: pointer;
+        border: none;
+        background: transparent;
+        width: 100%;
+        text-align: left;
+        color: var(--text-primary);
+        font-size: 15px;
+        transition: background 0.15s;
+    }
+
+    .sheet-item:hover {
+        background: var(--bg-tertiary);
+    }
+
+    .sheet-item-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+    }
+
+    .sheet-item-icon.purple { background: #8b5cf6; }
+    .sheet-item-icon.blue   { background: #3b82f6; }
+    .sheet-item-icon.green  { background: #10b981; }
+
+    .sheet-item-label {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+    }
+
+    .sheet-item-label span:first-child {
+        font-weight: 600;
+        font-size: 15px;
+    }
+
+    .sheet-item-label span:last-child {
+        font-size: 12px;
+        color: var(--text-muted);
+    }
+
+    /* =====================
+       СТАНДАРТНЫЕ МОДАЛКИ
+    ===================== */
     .modal {
         display: none;
         position: fixed;
@@ -407,12 +611,15 @@
         font-size: 22px;
         color: var(--text-primary);
         margin: 0;
+        display: flex;
+        align-items: center;
     }
 
     .close-modal {
         font-size: 30px;
         color: var(--text-muted);
         cursor: pointer;
+        line-height: 1;
     }
 
     .close-modal:hover {
@@ -458,130 +665,123 @@
         flex: 1;
     }
 
-    /* Анимации */
+    .btn {
+        padding: 12px 16px;
+        background: var(--accent);
+        color: white;
+        border: none;
+        border-radius: 12px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: var(--transition);
+    }
+
+    .btn-secondary {
+        background: var(--bg-tertiary);
+        color: var(--text-primary);
+    }
+
+    .btn-secondary:hover {
+        background: var(--bg-hover);
+    }
+
+    /* Анимации уведомлений */
     @keyframes slideIn {
-        from {
-            transform: translateX(100%);
-            opacity: 0;
-        }
-        to {
-            transform: translateX(0);
-            opacity: 1;
-        }
+        from { transform: translateX(100%); opacity: 0; }
+        to   { transform: translateX(0);    opacity: 1; }
     }
 
     @keyframes slideOut {
-        from {
-            transform: translateX(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateX(100%);
-            opacity: 0;
-        }
+        from { transform: translateX(0);    opacity: 1; }
+        to   { transform: translateX(100%); opacity: 0; }
     }
 
-    /* Скрываем стандартный контейнер */
+    /* Скрываем стандартный лейаут */
     .app-container,
     .sidebar,
     .main-content {
         display: none;
     }
 
-    /* Мобильная адаптация */
     @media (max-width: 768px) {
-        .chats-header {
-            padding: 12px 15px;
-        }
-
-        .search-bar {
-            margin: 8px 15px;
-        }
-
-        .chats-list {
-            padding: 10px 15px;
-        }
-
-        .chat-preview p {
-            max-width: 150px;
-        }
-
-        .delete-chat-btn {
-            opacity: 1;
-        }
+        .chats-header { padding: 10px 14px; }
+        .search-bar   { margin: 8px 12px; }
+        .chats-list   { padding: 10px 12px; }
+        .chat-preview p { max-width: 150px; }
+        .delete-chat-btn { opacity: 1; }
     }
+    </style>
 
-    @media (max-width: 480px) {
-        .chat-preview p {
-            max-width: 120px;
-        }
+    <!-- ===== DRAWER OVERLAY ===== -->
+    <div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
 
-        .btn-sm {
-            padding: 8px 10px;
-            font-size: 12px;
-        }
-    }
-</style>
-    <!-- Шапка -->
-    <div class="chats-header">
-        <div class="user-info">
+    <!-- ===== БОКОВОЕ МЕНЮ ===== -->
+    <div class="drawer" id="drawer">
+        <div class="drawer-profile">
             <img src="{{ url_for('static', filename='uploads/' + current_user.avatar) }}"
                  alt="Avatar"
-                 class="avatar"
-                 onclick="window.location.href='{{ url_for('profile', user_id=current_user.id) }}'"
-                 style="cursor: pointer;">
-            <div class="user-details">
-                <h3>{{ current_user.username }}</h3>
-                <p>
-                    <span class="status online"></span>
-                    Онлайн
-                </p>
-            </div>
+                 class="drawer-avatar"
+                 onerror="this.src='{{ url_for('static', filename='uploads/avatars/default.png') }}'">
+            <div class="drawer-username">{{ current_user.username }}</div>
+            <div class="drawer-status">Онлайн</div>
         </div>
-        <div class="header-actions">
-            <button class="btn-icon" onclick="showCreateGroupModal()" title="Создать группу">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
-                    <use xlink:href="#icon-group"></use>
+
+        <nav class="drawer-menu">
+            <a href="{{ url_for('profile', user_id=current_user.id) }}" class="drawer-menu-item">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="12" cy="8" r="4"/>
+                    <path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/>
                 </svg>
-            </button>
-            <a href="{{ url_for('logout') }}" class="btn-icon" title="Выйти">
-                <svg width="24" height="24" viewBox="0 0 1024 1024">
-                    <use xlink:href="#icon-logout"></use>
-                </svg>
+                Профиль
             </a>
+
+            <a href="{{ url_for('security') }}" class="drawer-menu-item">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                Безопасность
+            </a>
+
+            <div class="drawer-divider"></div>
+
+            <a href="{{ url_for('logout') }}" class="drawer-menu-item" style="color: var(--danger, #e53e3e);">
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                    <polyline points="16 17 21 12 16 7"/>
+                    <line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Выйти
+            </a>
+        </nav>
+    </div>
+
+    <!-- ===== ШАПКА ===== -->
+    <div class="chats-header">
+        <div class="header-left">
+            <button class="burger-btn" onclick="openDrawer()" title="Меню">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <span class="header-title">Чаты</span>
         </div>
     </div>
 
-    <!-- Поиск -->
+    <!-- ===== ПОИСК ===== -->
     <div class="search-bar">
-        <svg width="20" height="20" viewBox="0 0 1024 1024">
+        <svg width="18" height="18" viewBox="0 0 1024 1024">
             <use xlink:href="#icon-search"></use>
         </svg>
-        <input type="text" placeholder="Поиск или начать новый чат" id="searchInput">
+        <input type="text" placeholder="Поиск" id="searchInput">
     </div>
 
-    <!-- Кнопки действий -->
-    <div class="action-buttons">
-        <button class="btn btn-secondary btn-sm" onclick="showNewChatForm()">
-            <svg width="18" height="18" viewBox="0 0 1024 1024" style="margin-right: 6px;">
-                <use xlink:href="#icon-chat"></use>
-            </svg>
-            Личный чат
-        </button>
-        <button class="btn btn-secondary btn-sm" onclick="showCreateGroupModal()">
-            <svg width="18" height="18" viewBox="0 0 24 24" style="margin-right: 6px;">
-                <use xlink:href="#icon-group"></use>
-            </svg>
-            Группа
-        </button>
-    </div>
-
-    <!-- Заголовок списка -->
+    <!-- ===== ЗАГОЛОВОК СПИСКА ===== -->
     <div class="chats-title">
         <span>Все чаты</span>
     </div>
 
-    <!-- Список чатов -->
+    <!-- ===== СПИСОК ЧАТОВ ===== -->
     <div class="chats-list" id="chatsList">
         {% if chats %}
             {% for chat in chats %}
@@ -611,14 +811,10 @@
                                         {% if chat.last_message.content %}
                                             {{ chat.last_message.content[:30] }}
                                         {% elif chat.last_message.image_path %}
-                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
-                                                <use xlink:href="#icon-image"></use>
-                                            </svg>
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-image"></use></svg>
                                             Фото
                                         {% elif chat.last_message.file_path %}
-                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
-                                                <use xlink:href="#icon-file"></use>
-                                            </svg>
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-file"></use></svg>
                                             {{ chat.last_message.file_name[:20] if chat.last_message.file_name else 'Файл' }}
                                         {% endif %}
                                     {% else %}
@@ -631,11 +827,8 @@
                             </div>
                         </div>
                     </a>
-                    <!-- Кнопка удаления -->
                     <button class="delete-chat-btn" onclick="event.preventDefault(); event.stopPropagation(); deleteChat({{ chat.id }}, '{{ chat.other_user.username }}')" title="Удалить чат">
-                        <svg width="20" height="20" viewBox="0 0 1024 1024">
-                            <use xlink:href="#icon-delete"></use>
-                        </svg>
+                        <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
                     </button>
                 </div>
                 {% elif chat.type == 'group' %}
@@ -665,14 +858,10 @@
                                         {% if chat.last_message.content %}
                                             {{ chat.last_message.content[:30] }}
                                         {% elif chat.last_message.image_path %}
-                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
-                                                <use xlink:href="#icon-image"></use>
-                                            </svg>
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-image"></use></svg>
                                             Фото
                                         {% elif chat.last_message.file_path %}
-                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;">
-                                                <use xlink:href="#icon-file"></use>
-                                            </svg>
+                                            <svg width="16" height="16" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 4px;"><use xlink:href="#icon-file"></use></svg>
                                             {{ chat.last_message.file_name[:20] if chat.last_message.file_name else 'Файл' }}
                                         {% endif %}
                                     {% else %}
@@ -696,13 +885,58 @@
                     </svg>
                 </span>
                 <h3>Нет чатов</h3>
-                <p>Начните новый чат или создайте группу</p>
+                <p>Нажмите карандаш, чтобы начать общение</p>
             </div>
         {% endif %}
     </div>
+
+    <!-- ===== FAB КНОПКА КАРАНДАШ ===== -->
+    <button class="fab-btn" onclick="openSheet()" title="Новый чат">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+        </svg>
+    </button>
+
+    <!-- ===== SHEET OVERLAY ===== -->
+    <div class="sheet-overlay" id="sheetOverlay" onclick="closeSheet()"></div>
+
+    <!-- ===== BOTTOM SHEET (ЧТО СОЗДАТЬ) ===== -->
+    <div class="bottom-sheet" id="bottomSheet">
+        <div class="sheet-handle"></div>
+        <div class="sheet-title">Создать</div>
+        <div class="sheet-items">
+            <button class="sheet-item" onclick="closeSheet(); showNewChatForm();">
+                <div class="sheet-item-icon blue">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                </div>
+                <div class="sheet-item-label">
+                    <span>Личный чат</span>
+                    <span>Напишите любому пользователю</span>
+                </div>
+            </button>
+
+            <button class="sheet-item" onclick="closeSheet(); showCreateGroupModal();">
+                <div class="sheet-item-icon purple">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                        <circle cx="9" cy="7" r="4"/>
+                        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+                    </svg>
+                </div>
+                <div class="sheet-item-label">
+                    <span>Группа</span>
+                    <span>Чат для нескольких участников</span>
+                </div>
+            </button>
+        </div>
+    </div>
 </div>
 
-<!-- Модальное окно нового чата -->
+<!-- ===== МОДАЛКА: НОВЫЙ ЧАТ ===== -->
 <div class="modal" id="newChatModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -727,7 +961,7 @@
     </div>
 </div>
 
-<!-- Модальное окно создания группы -->
+<!-- ===== МОДАЛКА: СОЗДАНИЕ ГРУППЫ ===== -->
 <div class="modal" id="createGroupModal">
     <div class="modal-content">
         <div class="modal-header">
@@ -761,7 +995,31 @@
 </div>
 
 <script>
-    // Функции для модальных окон
+    /* ===== DRAWER (боковое меню) ===== */
+    function openDrawer() {
+        document.getElementById('drawer').classList.add('active');
+        document.getElementById('drawerOverlay').classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeDrawer() {
+        document.getElementById('drawer').classList.remove('active');
+        document.getElementById('drawerOverlay').classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    /* ===== BOTTOM SHEET ===== */
+    function openSheet() {
+        document.getElementById('bottomSheet').classList.add('active');
+        document.getElementById('sheetOverlay').classList.add('active');
+    }
+
+    function closeSheet() {
+        document.getElementById('bottomSheet').classList.remove('active');
+        document.getElementById('sheetOverlay').classList.remove('active');
+    }
+
+    /* ===== МОДАЛКИ ===== */
     function showNewChatForm() {
         document.getElementById('newChatModal').classList.add('active');
     }
@@ -778,160 +1036,122 @@
         document.getElementById('createGroupModal').classList.remove('active');
     }
 
-    // Создание группы
-    document.getElementById('createGroupForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-        const formData = new FormData(this);
-        fetch('/group/create', {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => {
-            if (response.redirected) {
-                window.location.href = response.url;
-            } else {
-                return response.json().then(data => {
-                    alert(data.error || 'Ошибка при создании группы');
-                });
-            }
-        })
-        .catch(error => {
-            console.error('Error:', error);
-            alert('Ошибка при создании группы');
+    // Закрытие по клику на оверлей
+    document.querySelectorAll('.modal').forEach(modal => {
+        modal.addEventListener('click', function(e) {
+            if (e.target === this) this.classList.remove('active');
         });
     });
 
-    // Удаление чата
+    // Закрытие по ESC
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            closeDrawer();
+            closeSheet();
+            document.querySelectorAll('.modal.active').forEach(m => m.classList.remove('active'));
+        }
+    });
+
+    /* ===== СОЗДАНИЕ ГРУППЫ ===== */
+    document.getElementById('createGroupForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(this);
+        fetch('/group/create', { method: 'POST', body: formData })
+            .then(response => {
+                if (response.redirected) {
+                    window.location.href = response.url;
+                } else {
+                    return response.json().then(data => alert(data.error || 'Ошибка при создании группы'));
+                }
+            })
+            .catch(() => alert('Ошибка при создании группы'));
+    });
+
+    /* ===== УДАЛЕНИЕ ЧАТА ===== */
     function deleteChat(chatId, chatName) {
         if (confirm(`Удалить чат с ${chatName}? Все сообщения будут удалены.`)) {
             fetch(`/chat/${chatId}/delete`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                }
+                headers: { 'Content-Type': 'application/json' }
             })
-            .then(response => response.json())
+            .then(r => r.json())
             .then(data => {
                 if (data.success) {
-                    const chatElement = document.querySelector(`.chat-item-wrapper[data-chat-id="${chatId}"][data-type="private"]`);
-                    if (chatElement) {
-                        chatElement.remove();
-                    }
-                    const chatsList = document.querySelector('.chats-list');
-                    if (chatsList.children.length === 0) {
-                        chatsList.innerHTML = `
+                    const el = document.querySelector(`.chat-item-wrapper[data-chat-id="${chatId}"][data-type="private"]`);
+                    if (el) el.remove();
+                    const list = document.querySelector('.chats-list');
+                    if (list.children.length === 0) {
+                        list.innerHTML = `
                             <div class="empty-chats">
                                 <span class="empty-icon">
-                                    <svg width="64" height="64" viewBox="0 0 1024 1024">
-                                        <use xlink:href="#icon-chat"></use>
-                                    </svg>
+                                    <svg width="64" height="64" viewBox="0 0 1024 1024"><use xlink:href="#icon-chat"></use></svg>
                                 </span>
                                 <h3>Нет чатов</h3>
-                                <p>Начните новый чат или создайте группу</p>
-                            </div>
-                        `;
+                                <p>Нажмите карандаш, чтобы начать общение</p>
+                            </div>`;
                     }
-                    showNotification('Чат успешно удален', 'success');
+                    showNotification('Чат удалён', 'success');
                 } else {
                     alert(data.error || 'Ошибка при удалении чата');
                 }
             })
-            .catch(error => {
-                console.error('Ошибка:', error);
-                alert('Ошибка при удалении чата');
-            });
+            .catch(() => alert('Ошибка при удалении чата'));
         }
     }
 
-    // Закрытие модальных окон по клику на оверлей
-    document.querySelectorAll('.modal').forEach(modal => {
-        modal.addEventListener('click', function(e) {
-            if (e.target === this) {
-                this.classList.remove('active');
-            }
-        });
-    });
-
-    // Поиск по чатам
+    /* ===== ПОИСК ===== */
     document.getElementById('searchInput').addEventListener('input', function(e) {
-        const query = e.target.value.toLowerCase();
-        document.querySelectorAll('.chat-item-wrapper').forEach(wrapper => {
-            const title = wrapper.querySelector('h3').textContent.toLowerCase();
-            wrapper.style.display = title.includes(query) ? 'flex' : 'none';
+        const q = e.target.value.toLowerCase();
+        document.querySelectorAll('.chat-item-wrapper').forEach(w => {
+            const title = w.querySelector('h3').textContent.toLowerCase();
+            w.style.display = title.includes(q) ? 'flex' : 'none';
         });
     });
 
-    // Закрытие модальных окон по ESC
-    document.addEventListener('keydown', function(e) {
-        if (e.key === 'Escape') {
-            document.querySelectorAll('.modal.active').forEach(modal => {
-                modal.classList.remove('active');
-            });
-        }
-    });
-
-    // Функция показа уведомлений
+    /* ===== УВЕДОМЛЕНИЯ ===== */
     function showNotification(message, type = 'success') {
-        const notification = document.createElement('div');
-        notification.className = `notification ${type}`;
-        notification.textContent = message;
-        notification.style.cssText = `
-            position: fixed;
-            top: 20px;
-            right: 20px;
-            padding: 15px 20px;
-            border-radius: 10px;
-            color: white;
-            z-index: 9999;
+        const n = document.createElement('div');
+        n.textContent = message;
+        n.style.cssText = `
+            position: fixed; top: 20px; right: 20px; padding: 15px 20px;
+            border-radius: 10px; color: white; z-index: 9999;
             animation: slideIn 0.3s ease;
-            background: ${type === 'success' ? 'linear-gradient(135deg, #2ed573 0%, #1abc9c 100%)' : 'linear-gradient(135deg, #ff4757 0%, #ff3838 100%)'};
+            background: ${type === 'success'
+                ? 'linear-gradient(135deg, #2ed573 0%, #1abc9c 100%)'
+                : 'linear-gradient(135deg, #ff4757 0%, #ff3838 100%)'};
         `;
-        document.body.appendChild(notification);
+        document.body.appendChild(n);
         setTimeout(() => {
-            notification.style.animation = 'slideOut 0.3s ease';
-            setTimeout(() => notification.remove(), 300);
+            n.style.animation = 'slideOut 0.3s ease';
+            setTimeout(() => n.remove(), 300);
         }, 3000);
     }
 
-    // ==========================================
-    // АВТОМАТИЧЕСКОЕ ОБНОВЛЕНИЕ ЧАТОВ (2 секунды)
-    // ==========================================
+    /* ===== АВТООБНОВЛЕНИЕ ЧАТОВ ===== */
     let refreshInterval = null;
 
     function startAutoRefresh() {
         if (refreshInterval) clearInterval(refreshInterval);
-        refreshInterval = setInterval(() => {
-            fetchChatsList();
-        }, 1000); // 1 секунда
+        refreshInterval = setInterval(fetchChatsList, 1000);
     }
 
     function fetchChatsList() {
-        // Используем ваш существующий маршрут
         fetch('/api/get_chats_data')
-            .then(response => {
-                if (!response.ok) throw new Error('Network response was not ok');
-                return response.json();
-            })
-            .then(data => {
-                updateChatsList(data.chats);
-            })
-            .catch(error => {
-                console.error('Ошибка обновления чатов:', error);
-            });
+            .then(r => { if (!r.ok) throw new Error(); return r.json(); })
+            .then(data => updateChatsList(data.chats))
+            .catch(err => console.error('Ошибка обновления чатов:', err));
     }
 
     function updateChatsList(chats) {
         const chatsList = document.getElementById('chatsList');
         if (!chatsList) return;
-
         const scrollTop = chatsList.scrollTop;
-        let newHtml = '';
-        
+        let html = '';
+
         if (chats && chats.length > 0) {
             chats.forEach(chat => {
                 if (chat.type === 'private') {
-                    // Адаптация под ключи вашего API: other_username, other_avatar, last_message
-                    newHtml += `
+                    html += `
                     <div class="chat-item-wrapper" data-chat-id="${chat.id}" data-type="private">
                         <a href="${chat.chat_url}" class="chat-item">
                             <div class="chat-avatar">
@@ -951,14 +1171,11 @@
                             </div>
                         </a>
                         <button class="delete-chat-btn" onclick="event.preventDefault(); event.stopPropagation(); deleteChat(${chat.id}, '${chat.other_username}')" title="Удалить чат">
-                            <svg width="20" height="20" viewBox="0 0 1024 1024">
-                                <use xlink:href="#icon-delete"></use>
-                            </svg>
+                            <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
                         </button>
                     </div>`;
                 } else if (chat.type === 'group') {
-                    // Адаптация под ключи вашего API: group_name, group_icon
-                    newHtml += `
+                    html += `
                     <div class="chat-item-wrapper" data-chat-id="${chat.id}" data-type="group">
                         <a href="${chat.chat_url}" class="chat-item">
                             <div class="chat-avatar">
@@ -980,38 +1197,23 @@
                 }
             });
         } else {
-            newHtml = `
+            html = `
             <div class="empty-chats">
                 <span class="empty-icon">
-                    <svg width="64" height="64" viewBox="0 0 1024 1024">
-                        <use xlink:href="#icon-chat"></use>
-                    </svg>
+                    <svg width="64" height="64" viewBox="0 0 1024 1024"><use xlink:href="#icon-chat"></use></svg>
                 </span>
                 <h3>Нет чатов</h3>
-                <p>Начните новый чат или создайте группу</p>
+                <p>Нажмите карандаш, чтобы начать общение</p>
             </div>`;
         }
 
-        // Обновляем DOM только если контент изменился (чтобы не сбрасывать фокус и анимации лишний раз)
-        if (chatsList.innerHTML !== newHtml) {
-            chatsList.innerHTML = newHtml;
-            chatsList.scrollTop = scrollTop; 
+        if (chatsList.innerHTML !== html) {
+            chatsList.innerHTML = html;
+            chatsList.scrollTop = scrollTop;
         }
     }
 
-    // Запуск при загрузке
-    document.addEventListener('DOMContentLoaded', function() {
-        startAutoRefresh();
-    });
-
-    // Пауза при скрытии вкладки
-    // document.addEventListener('visibilitychange', function() {
-    //     if (document.hidden) {
-    //         if (refreshInterval) clearInterval(refreshInterval);
-    //     } else {
-    //         startAutoRefresh();
-    //     }
-    // });
+    document.addEventListener('DOMContentLoaded', startAutoRefresh);
 </script>
 
 {% endblock %}

@@ -19,6 +19,7 @@ class User(UserMixin, db.Model):
     messages_received = db.relationship('Message', foreign_keys='Message.receiver_id', backref='receiver', lazy=True)
     owned_groups = db.relationship('Group', backref='owner', lazy=True)
     group_memberships = db.relationship('GroupMember', backref='user', lazy=True)
+    sessions = db.relationship('UserSession', backref='user', lazy=True, cascade='all, delete-orphan')
 
 class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -113,3 +114,67 @@ class PasswordReset(db.Model):
     used = db.Column(db.Boolean, default=False)
 
     user = db.relationship('User', backref=db.backref('reset_tokens', lazy=True))
+
+
+class UserSession(db.Model):
+    """
+    Хранит информацию об активных и завершённых сессиях пользователя.
+    Позволяет показывать устройства входа и завершать конкретные сессии.
+    """
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+
+    # Уникальный токен сессии (хранится в Flask session)
+    session_token = db.Column(db.String(64), unique=True, nullable=False)
+
+    # Информация об устройстве / браузере
+    ip_address = db.Column(db.String(45), nullable=True)       # IPv4 или IPv6
+    user_agent = db.Column(db.String(500), nullable=True)      # Полный UA-string
+    device_type = db.Column(db.String(20), nullable=True)      # mobile / tablet / desktop
+    browser = db.Column(db.String(100), nullable=True)         # Chrome 120, Safari 17...
+    os = db.Column(db.String(100), nullable=True)              # Windows 11, iOS 17...
+    country = db.Column(db.String(100), nullable=True)         # Страна (опционально)
+    city = db.Column(db.String(100), nullable=True)            # Город (опционально)
+
+    # Временны́е метки
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)   # Время входа
+    last_active = db.Column(db.DateTime, default=datetime.utcnow)  # Последняя активность
+    ended_at = db.Column(db.DateTime, nullable=True)               # Время выхода (NULL = активна)
+
+    # Флаги
+    is_active = db.Column(db.Boolean, default=True)
+    is_current = db.Column(db.Boolean, default=False)  # Текущая сессия пользователя
+
+    def end_session(self):
+        """Завершает сессию"""
+        self.is_active = False
+        self.ended_at = datetime.utcnow()
+
+    def duration_str(self):
+        """Возвращает читаемую длительность сессии"""
+        end = self.ended_at or datetime.utcnow()
+        delta = end - self.created_at
+        days = delta.days
+        hours = delta.seconds // 3600
+        minutes = (delta.seconds % 3600) // 60
+        if days > 0:
+            return f"{days} д. {hours} ч."
+        elif hours > 0:
+            return f"{hours} ч. {minutes} мин."
+        else:
+            return f"{minutes} мин."
+
+    def last_active_str(self):
+        """Возвращает читаемое время последней активности"""
+        now = datetime.utcnow()
+        delta = now - self.last_active
+        if delta.seconds < 60:
+            return "только что"
+        elif delta.seconds < 3600:
+            return f"{delta.seconds // 60} мин. назад"
+        elif delta.days == 0:
+            return f"{delta.seconds // 3600} ч. назад"
+        elif delta.days == 1:
+            return "вчера"
+        else:
+            return self.last_active.strftime('%d.%m.%Y %H:%M')
