@@ -14,6 +14,13 @@ def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
 
+    # Сжатие ответов (gzip/brotli) — уменьшает трафик на 60-80%
+    try:
+        from flask_compress import Compress
+        Compress(app)
+    except ImportError:
+        print("[INFO] flask-compress не установлен. Запусти: pip install flask-compress")
+
     # Инициализация расширений
     db.init_app(app)
     login_manager.init_app(app)
@@ -61,6 +68,12 @@ def create_app():
             # создаём новую запись автоматически
             return
 
+        # Кэшируем результат валидации в g, чтобы не лезть в БД дважды за запрос
+        from flask import g as _g
+        cache_key = f'sess_valid_{session_token}'
+        if hasattr(_g, cache_key):
+            return
+
         # Ищем сессию в БД
         user_session = UserSession.query.filter_by(
             session_token=session_token,
@@ -78,6 +91,9 @@ def create_app():
             logout_user()
             session.clear()
             return redirect(url_for('login'))
+
+        # Помечаем как проверенное для этого запроса
+        setattr(_g, cache_key, True)
 
         # Обновляем время последней активности (не чаще раза в минуту)
         now = datetime.utcnow()

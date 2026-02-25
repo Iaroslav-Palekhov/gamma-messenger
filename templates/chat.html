@@ -61,14 +61,14 @@
 .message {
     max-width: 65%;
     clear: both;
-    animation: messageAppear 0.3s ease-out;
     position: relative;
+}
+.message.received {
+    animation: messageAppear 0.2s ease-out;
+    align-self: flex-start;
 }
 .message.sent {
     align-self: flex-end;
-}
-.message.received {
-    align-self: flex-start;
 }
 .message-wrapper {
     display: flex;
@@ -939,14 +939,76 @@ function sendMessage() {
     .then(response => response.json())
     .then(data => {
         if (data.success) {
+            // Обновляем временное сообщение на месте — без удаления и вставки
             const tempMessage = document.querySelector(`.message[data-message-id="${tempMessageId}"]`);
             if (tempMessage) {
-                tempMessage.remove();
-            }
+                // Апгрейдим ID и убираем класс "sending"
+                tempMessage.dataset.messageId = data.message_id;
+                tempMessage.classList.remove('sending');
 
-            // Передаём replyToData для корректного отображения
-            const realMessage = createRealMessage(data, messageText, fileInput.files[0], replyToData);
-            container.insertAdjacentHTML('beforeend', realMessage);
+                // Обновляем контент если был файл/изображение (у текстовых уже всё правильно)
+                if (data.image_path) {
+                    const contentDiv = tempMessage.querySelector('.message-content');
+                    if (contentDiv) {
+                        contentDiv.innerHTML = `<img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
+                    }
+                } else if (data.file_path) {
+                    const contentDiv = tempMessage.querySelector('.message-content');
+                    if (contentDiv) {
+                        const fileName = data.file_name || 'Файл';
+                        const ext = fileName.split('.').pop().toLowerCase();
+                        let fileIcon = '';
+                        if (['jpg','jpeg','png','gif','bmp','webp'].includes(ext)) {
+                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-image"></use></svg>';
+                        } else if (ext === 'pdf') {
+                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-pdf"></use></svg>';
+                        } else if (['zip','rar','7z'].includes(ext)) {
+                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-zip"></use></svg>';
+                        } else {
+                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-file"></use></svg>';
+                        }
+                        contentDiv.innerHTML = `
+                            <div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')">
+                                <span class="file-icon">${fileIcon}</span>
+                                <div class="file-info">
+                                    <div class="file-name">${escapeHtml(fileName)}</div>
+                                    <div class="file-size">${data.file_size || '0 KB'}</div>
+                                </div>
+                                <span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span>
+                            </div>`;
+                    }
+                }
+
+                // Заменяем спиннер на галочку — только статус, без перерисовки пузыря
+                const readStatus = tempMessage.querySelector('.read-status');
+                if (readStatus) {
+                    readStatus.title = 'Отправлено';
+                    readStatus.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`;
+                    readStatus.classList.remove('spinning');
+                }
+
+                // Добавляем кнопки действий если их нет
+                if (!tempMessage.querySelector('.message-actions')) {
+                    const bubble = tempMessage.querySelector('.message-bubble');
+                    if (bubble) {
+                        bubble.insertAdjacentHTML('beforeend', `
+                            <div class="message-actions">
+                                <button class="message-action-btn" onclick="replyToMessage(${data.message_id})" title="Ответить">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-back"></use></svg>
+                                </button>
+                                <button class="message-action-btn" onclick="forwardMessage(${data.message_id})" title="Переслать">
+                                    <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg>
+                                </button>
+                                ${data.content ? `<button class="message-action-btn" onclick="editMessage(${data.message_id}, this)" title="Редактировать">
+                                    <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>
+                                </button>` : ''}
+                                <button class="message-action-btn" onclick="deleteMessage(${data.message_id})" title="Удалить" style="color:var(--danger);">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
+                                </button>
+                            </div>`);
+                    }
+                }
+            }
 
             clearFile();
             cancelReply();
@@ -2083,6 +2145,30 @@ if (messageInputEl) {
     </main>
 
     <!-- Форма отправки -->
+    {% if chat_is_blocked %}
+    <footer class="message-input" style="padding: 12px 16px;">
+        <div style="
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 13px 18px;
+            background: rgba(239,68,68,0.08);
+            border: 1.5px solid rgba(239,68,68,0.22);
+            border-radius: 14px;
+            color: #f87171;
+            font-size: 14px;
+            font-weight: 500;
+        ">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                 stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>
+            </svg>
+            Переписка недоступна — пользователь заблокирован
+        </div>
+    </footer>
+    {% else %}
     <footer class="message-input">
         <form id="messageForm" enctype="multipart/form-data">
             <input type="hidden" name="chat_id" value="{{ chat.id }}">
@@ -2130,6 +2216,7 @@ if (messageInputEl) {
             </div>
         </form>
     </footer>
+    {% endif %}
 </div>
 
 <!-- Модальное окно для изображений -->

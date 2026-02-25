@@ -30,6 +30,14 @@ class Config:
     SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL', 'sqlite:///database.db')
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
+    # Оптимизация SQLAlchemy connection pool
+    SQLALCHEMY_ENGINE_OPTIONS = {
+        'pool_pre_ping': True,       # Проверяем соединение перед использованием
+        'pool_recycle': 280,         # Переиспользуем соединения каждые 280 сек
+        'pool_size': 10,             # Размер пула
+        'max_overflow': 5,           # Дополнительные соединения при пике
+    }
+
     # Загрузка файлов
     UPLOAD_FOLDER = 'static/uploads'
     MAX_CONTENT_LENGTH = 500 * 1024 * 1024  # 500 MB
@@ -51,6 +59,15 @@ class Config:
     MAX_USERNAME_LENGTH = 50
     MIN_PASSWORD_LENGTH = 8
     RATELIMIT_ENABLED = True
+
+    # Сжатие ответов (Flask-Compress)
+    COMPRESS_MIMETYPES = [
+        'text/html', 'text/css', 'text/javascript',
+        'application/javascript', 'application/json',
+        'text/plain', 'image/svg+xml'
+    ]
+    COMPRESS_LEVEL = 6        # Баланс скорость/размер (1-9)
+    COMPRESS_MIN_SIZE = 500   # Сжимаем только если > 500 байт
 
     # Продакшен: раскомментируй при HTTPS:
     # SESSION_COOKIE_SECURE = True

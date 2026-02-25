@@ -55,10 +55,10 @@ class Chat(db.Model):
 
 class Message(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    chat_id = db.Column(db.Integer, db.ForeignKey('chat.id'), nullable=True)
-    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=True)
-    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
-    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True)
+    chat_id = db.Column(db.Integer, db.ForeignKey('chat.id'), nullable=True, index=True)
+    group_id = db.Column(db.Integer, db.ForeignKey('group.id'), nullable=True, index=True)
+    sender_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    receiver_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=True, index=True)
     content = db.Column(db.Text, nullable=True)
     image_path = db.Column(db.String(200), nullable=True)
     file_path = db.Column(db.String(200), nullable=True)
@@ -66,10 +66,10 @@ class Message(db.Model):
     file_type = db.Column(db.String(100), nullable=True)
     file_size = db.Column(db.Integer, nullable=True)
     file_category = db.Column(db.String(50), nullable=True)
-    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
-    is_read = db.Column(db.Boolean, default=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+    is_read = db.Column(db.Boolean, default=False, index=True)
     is_edited = db.Column(db.Boolean, default=False)
-    is_deleted = db.Column(db.Boolean, default=False)
+    is_deleted = db.Column(db.Boolean, default=False, index=True)
 
     reply_to_id = db.Column(db.Integer, db.ForeignKey('message.id'), nullable=True)
     forwarded_from_id = db.Column(db.Integer, db.ForeignKey('message.id'), nullable=True)
@@ -122,10 +122,10 @@ class UserSession(db.Model):
     Позволяет показывать устройства входа и завершать конкретные сессии.
     """
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
 
     # Уникальный токен сессии (хранится в Flask session)
-    session_token = db.Column(db.String(64), unique=True, nullable=False)
+    session_token = db.Column(db.String(64), unique=True, nullable=False, index=True)
 
     # Информация об устройстве / браузере
     ip_address = db.Column(db.String(45), nullable=True)       # IPv4 или IPv6
@@ -178,3 +178,16 @@ class UserSession(db.Model):
             return "вчера"
         else:
             return self.last_active.strftime('%d.%m.%Y %H:%M')
+
+
+class BlockedUser(db.Model):
+    """Чёрный список — заблокированные пользователи."""
+    id = db.Column(db.Integer, primary_key=True)
+    blocker_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    blocked_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    blocker = db.relationship('User', foreign_keys=[blocker_id], backref=db.backref('blocked_users', lazy=True))
+    blocked_user = db.relationship('User', foreign_keys=[blocked_id])
+
+    __table_args__ = (db.UniqueConstraint('blocker_id', 'blocked_id', name='unique_block'),)

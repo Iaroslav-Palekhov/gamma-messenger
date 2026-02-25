@@ -1,12 +1,15 @@
 from flask import render_template, request, jsonify, redirect, url_for, send_from_directory, session
 from flask_login import login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-from datetime import datetime
+from datetime import datetime, timedelta
+from sqlalchemy.orm import joinedload
+from sqlalchemy import func
 import os
 import mimetypes
 import secrets
+import threading
 
-from models import User, Group, GroupMember, Chat, Message, ForwardedMessage, PasswordReset, UserSession
+from models import User, Group, GroupMember, Chat, Message, ForwardedMessage, PasswordReset, UserSession, BlockedUser
 from utils import (
     compress_image, get_file_category, get_file_icon,
     format_file_size, is_file_too_large, save_file,
@@ -64,6 +67,25 @@ def register_routes(app, db, login_manager):
         db.session.commit()
         return sess
 
+    def _current_session_age():
+        """Возвращает возраст текущей сессии в секундах. None если сессия не найдена."""
+        current_token = session.get('session_token')
+        if not current_token:
+            return None
+        sess = UserSession.query.filter_by(
+            session_token=current_token,
+            user_id=current_user.id
+        ).first()
+        if not sess:
+            return None
+        return (datetime.utcnow() - sess.created_at).total_seconds()
+
+    def _is_blocked_between(user_a_id, user_b_id):
+        return BlockedUser.query.filter(
+            ((BlockedUser.blocker_id == user_a_id) & (BlockedUser.blocked_id == user_b_id)) |
+            ((BlockedUser.blocker_id == user_b_id) & (BlockedUser.blocked_id == user_a_id))
+        ).first() is not None
+
     # ============================================================
     # ИНДЕКС
     # ============================================================
@@ -105,7 +127,6 @@ def register_routes(app, db, login_manager):
 
             login_user(user)
 
-            # Создаём запись сессии
             tok = secrets.token_hex(32)
             session['session_token'] = tok
             _create_session_record(user.id, tok, is_current=True)
@@ -129,11 +150,10 @@ def register_routes(app, db, login_manager):
 
             if user and check_password_hash(user.password, password):
                 login_user(user)
-                user.status   = 'online'
+                user.status    = 'online'
                 user.last_seen = datetime.utcnow()
                 db.session.commit()
 
-                # Создаём запись сессии
                 tok = secrets.token_hex(32)
                 session['session_token'] = tok
                 _create_session_record(user.id, tok, is_current=True)
@@ -147,7 +167,6 @@ def register_routes(app, db, login_manager):
     @app.route('/logout')
     @login_required
     def logout():
-        # Завершаем текущую сессию в БД
         current_token = session.get('session_token')
         if current_token:
             sess = UserSession.query.filter_by(session_token=current_token).first()
@@ -223,6 +242,10 @@ def register_routes(app, db, login_manager):
         if not other_user:
             return redirect(url_for('chats'))
 
+        # Нельзя создать чат если есть блокировка в любую сторону
+        if _is_blocked_between(current_user.id, other_user.id):
+            return redirect(url_for('chats'))
+
         existing_chat = Chat.query.filter(
             ((Chat.user1_id == current_user.id) & (Chat.user2_id == other_user.id)) |
             ((Chat.user1_id == other_user.id) & (Chat.user2_id == current_user.id))
@@ -275,8 +298,12 @@ def register_routes(app, db, login_manager):
                 'file_name': msg.file_name
             })
 
+        # Проверяем блокировку между участниками
+        chat_is_blocked = _is_blocked_between(current_user.id, other_user.id)
+
         return render_template('chat.html', chat=chat_obj, messages=messages,
-                               other_user=other_user, pinned_messages=pinned_messages)
+                               other_user=other_user, pinned_messages=pinned_messages,
+                               chat_is_blocked=chat_is_blocked)
 
     @app.route('/chat/<int:chat_id>/delete', methods=['POST'])
     @login_required
@@ -308,6 +335,9 @@ def register_routes(app, db, login_manager):
         """API endpoint для получения обновлённых данных чатов"""
         user_chats = Chat.query.filter(
             (Chat.user1_id == current_user.id) | (Chat.user2_id == current_user.id)
+        ).options(
+            joinedload(Chat.user1),
+            joinedload(Chat.user2)
         ).order_by(Chat.last_message_at.desc()).all()
 
         chats_data = []
@@ -345,14 +375,17 @@ def register_routes(app, db, login_manager):
                 'chat_url': url_for('chat', chat_id=chat.id)
             })
 
-        user_groups = GroupMember.query.filter_by(user_id=current_user.id).all()
-        for membership in user_groups:
+        user_memberships = GroupMember.query.filter_by(user_id=current_user.id).options(
+            joinedload(GroupMember.group)
+        ).all()
+        for membership in user_memberships:
             group        = membership.group
             last_message = Message.query.filter_by(group_id=group.id).order_by(Message.timestamp.desc()).first()
-            unread_count = Message.query.filter_by(
-                group_id=group.id,
-                is_read=False
-            ).filter(Message.sender_id != current_user.id).count()
+            unread_count = Message.query.filter(
+                Message.group_id == group.id,
+                Message.is_read == False,
+                Message.sender_id != current_user.id
+            ).count()
 
             last_message_preview = ''
             if last_message:
@@ -394,7 +427,15 @@ def register_routes(app, db, login_manager):
     @login_required
     def profile(user_id):
         user = User.query.get_or_404(user_id)
-        return render_template('profile.html', profile_user=user)
+
+        is_blocked = False
+        if user.id != current_user.id:
+            is_blocked = BlockedUser.query.filter_by(
+                blocker_id=current_user.id,
+                blocked_id=user.id
+            ).first() is not None
+
+        return render_template('profile.html', profile_user=user, is_blocked=is_blocked)
 
     @app.route('/profile/edit', methods=['GET', 'POST'])
     @login_required
@@ -426,7 +467,7 @@ def register_routes(app, db, login_manager):
         return render_template('edit_profile.html')
 
     # ============================================================
-    # БЕЗОПАСНОСТЬ
+    # БЕЗОПАСНОСТЬ — ГЛАВНАЯ (меню)
     # ============================================================
 
     @app.route('/security')
@@ -435,15 +476,20 @@ def register_routes(app, db, login_manager):
         sessions = UserSession.query.filter_by(
             user_id=current_user.id,
             is_active=True
-        ).order_by(
-            UserSession.last_active.desc()
         ).all()
 
-        current_token = session.get('session_token')
-        for s in sessions:
-            s.is_current = (s.session_token == current_token)
+        blocked_count = BlockedUser.query.filter_by(blocker_id=current_user.id).count()
 
-        return render_template('security.html', sessions=sessions)
+        return render_template('security.html', sessions=sessions, blocked_count=blocked_count)
+
+    # ============================================================
+    # БЕЗОПАСНОСТЬ — СМЕНА ПАРОЛЯ (страница)
+    # ============================================================
+
+    @app.route('/security/password')
+    @login_required
+    def security_password():
+        return render_template('password.html')
 
     @app.route('/security/change_password', methods=['POST'])
     @login_required
@@ -478,6 +524,33 @@ def register_routes(app, db, login_manager):
 
         return jsonify({'success': True, 'message': 'Пароль успешно изменён'})
 
+    # ============================================================
+    # БЕЗОПАСНОСТЬ — УСТРОЙСТВА
+    # ============================================================
+
+    @app.route('/security/devices')
+    @login_required
+    def security_devices():
+        sessions = UserSession.query.filter_by(
+            user_id=current_user.id,
+            is_active=True
+        ).order_by(UserSession.last_active.desc()).all()
+
+        current_token = session.get('session_token')
+        current_sess  = None
+        for s in sessions:
+            s.is_current = (s.session_token == current_token)
+            if s.is_current:
+                current_sess = s
+
+        # Нельзя завершать другие сессии, если текущая сессия моложе 24 часов
+        account_too_new = False
+        if current_sess:
+            age = datetime.utcnow() - current_sess.created_at
+            account_too_new = age < timedelta(hours=24)
+
+        return render_template('devices.html', sessions=sessions, account_too_new=account_too_new)
+
     @app.route('/security/terminate_session/<int:session_id>', methods=['POST'])
     @login_required
     def terminate_session(session_id):
@@ -488,7 +561,12 @@ def register_routes(app, db, login_manager):
 
         current_token = session.get('session_token')
         if sess.session_token == current_token:
-            return jsonify({'error': 'Нельзя завершить текущую сессию. Используйте "Выйти".'}), 400
+            return jsonify({'error': 'Нельзя завершить текущую сессию. Используйте «Выйти».'}), 400
+
+        # Проверяем возраст текущей сессии
+        age_seconds = _current_session_age()
+        if age_seconds is not None and age_seconds < 86400:  # 24 часа
+            return jsonify({'error': 'Управление устройствами доступно через 24 ч. после входа'}), 403
 
         sess.end_session()
         db.session.commit()
@@ -498,8 +576,13 @@ def register_routes(app, db, login_manager):
     @login_required
     def terminate_all_sessions():
         """Завершает все сессии кроме текущей."""
-        current_token    = session.get('session_token')
-        sessions_to_end  = UserSession.query.filter_by(
+        # Проверяем возраст текущей сессии
+        age_seconds = _current_session_age()
+        if age_seconds is not None and age_seconds < 86400:
+            return jsonify({'error': 'Управление устройствами доступно через 24 ч. после входа'}), 403
+
+        current_token   = session.get('session_token')
+        sessions_to_end = UserSession.query.filter_by(
             user_id=current_user.id,
             is_active=True
         ).all()
@@ -512,6 +595,53 @@ def register_routes(app, db, login_manager):
 
         db.session.commit()
         return jsonify({'success': True, 'ended': ended})
+
+    # ============================================================
+    # БЕЗОПАСНОСТЬ — ЧЁРНЫЙ СПИСОК
+    # ============================================================
+
+    @app.route('/security/blacklist')
+    @login_required
+    def security_blacklist():
+        blocked_users = BlockedUser.query.filter_by(blocker_id=current_user.id)\
+            .order_by(BlockedUser.created_at.desc()).all()
+        return render_template('blacklist.html', blocked_users=blocked_users)
+
+    @app.route('/security/block/<int:user_id>', methods=['POST'])
+    @login_required
+    def block_user(user_id):
+        if user_id == current_user.id:
+            return jsonify({'error': 'Нельзя заблокировать себя'}), 400
+
+        User.query.get_or_404(user_id)
+
+        existing = BlockedUser.query.filter_by(
+            blocker_id=current_user.id,
+            blocked_id=user_id
+        ).first()
+
+        if existing:
+            return jsonify({'error': 'Пользователь уже заблокирован'}), 400
+
+        block = BlockedUser(blocker_id=current_user.id, blocked_id=user_id)
+        db.session.add(block)
+        db.session.commit()
+        return jsonify({'success': True})
+
+    @app.route('/security/unblock/<int:user_id>', methods=['POST'])
+    @login_required
+    def unblock_user(user_id):
+        block = BlockedUser.query.filter_by(
+            blocker_id=current_user.id,
+            blocked_id=user_id
+        ).first()
+
+        if not block:
+            return jsonify({'error': 'Пользователь не заблокирован'}), 404
+
+        db.session.delete(block)
+        db.session.commit()
+        return jsonify({'success': True})
 
     # ============================================================
     # ГРУППЫ
@@ -830,22 +960,36 @@ def register_routes(app, db, login_manager):
         if content and contains_url(content):
             urls = extract_urls_from_text(content)
             if urls:
-                first_url    = urls[0]
-                preview_data = extract_link_preview(first_url)
-
-                if preview_data:
-                    message.link_url         = preview_data['url']
-                    message.link_title       = preview_data['title']
-                    message.link_description = preview_data['description']
-                    message.link_image       = preview_data['image']
-                    message.link_fetched_at  = datetime.utcnow()
+                first_url = urls[0]
+                # Получаем превью асинхронно, чтобы не блокировать ответ
+                def fetch_preview_async(app_ctx, msg_id, url):
+                    with app_ctx:
+                        try:
+                            preview_data = extract_link_preview(url)
+                            if preview_data:
+                                from models import db as _db, Message as _Msg
+                                msg = _Msg.query.get(msg_id)
+                                if msg:
+                                    msg.link_url         = preview_data['url']
+                                    msg.link_title       = preview_data['title']
+                                    msg.link_description = preview_data['description']
+                                    msg.link_image       = preview_data['image']
+                                    msg.link_fetched_at  = datetime.utcnow()
+                                    _db.session.commit()
+                        except Exception:
+                            pass
 
         if chat_id:
             chat_obj = Chat.query.get_or_404(chat_id)
             if chat_obj.user1_id != current_user.id and chat_obj.user2_id != current_user.id:
                 return jsonify({'error': 'Нет доступа'}), 403
 
-            receiver_id         = chat_obj.user2_id if chat_obj.user1_id == current_user.id else chat_obj.user1_id
+            receiver_id = chat_obj.user2_id if chat_obj.user1_id == current_user.id else chat_obj.user1_id
+
+            # Запрет отправки если заблокированы (в любую сторону)
+            if _is_blocked_between(current_user.id, receiver_id):
+                return jsonify({'error': 'blocked'}), 403
+
             message.chat_id     = chat_id
             message.receiver_id = receiver_id
             chat_obj.last_message_at = datetime.utcnow()
@@ -860,8 +1004,8 @@ def register_routes(app, db, login_manager):
             if not membership:
                 return jsonify({'error': 'Нет доступа'}), 403
 
-            message.group_id        = group_id
-            group.last_message_at   = datetime.utcnow()
+            message.group_id      = group_id
+            group.last_message_at = datetime.utcnow()
 
         if file and file.filename:
             filename      = file.filename
@@ -889,6 +1033,19 @@ def register_routes(app, db, login_manager):
 
         db.session.add(message)
         db.session.commit()
+
+        # Запускаем получение превью ссылки в фоне (если нужно)
+        if content and contains_url(content):
+            urls = extract_urls_from_text(content)
+            if urls:
+                msg_id = message.id
+                first_url = urls[0]
+                t = threading.Thread(
+                    target=fetch_preview_async,
+                    args=(app.app_context(), msg_id, first_url),
+                    daemon=True
+                )
+                t.start()
 
         return jsonify({
             'success': True,
@@ -977,8 +1134,8 @@ def register_routes(app, db, login_manager):
             if not membership:
                 return jsonify({'error': 'Нет доступа к группе'}), 403
 
-            forwarded_message.group_id  = target_id
-            group.last_message_at       = datetime.utcnow()
+            forwarded_message.group_id = target_id
+            group.last_message_at      = datetime.utcnow()
 
         db.session.add(forwarded_message)
         db.session.flush()
@@ -1056,6 +1213,10 @@ def register_routes(app, db, login_manager):
                 Message.group_id == chat_id,
                 Message.id > last_id,
                 Message.is_deleted == False
+            ).options(
+                joinedload(Message.sender),
+                joinedload(Message.reply_to),
+                joinedload(Message.forwarded_from)
             ).order_by(Message.timestamp).all()
 
             for msg in messages:
@@ -1072,6 +1233,10 @@ def register_routes(app, db, login_manager):
                 Message.chat_id == chat_id,
                 Message.id > last_id,
                 Message.is_deleted == False
+            ).options(
+                joinedload(Message.sender),
+                joinedload(Message.reply_to),
+                joinedload(Message.forwarded_from)
             ).order_by(Message.timestamp).all()
 
             for msg in messages:
@@ -1080,9 +1245,22 @@ def register_routes(app, db, login_manager):
 
             db.session.commit()
 
+        # Собираем все нужные sender_id для reply/forward одним запросом
+        extra_user_ids = set()
+        for msg in messages:
+            if msg.reply_to:
+                extra_user_ids.add(msg.reply_to.sender_id)
+            if msg.forwarded_from:
+                extra_user_ids.add(msg.forwarded_from.sender_id)
+
+        extra_users = {}
+        if extra_user_ids:
+            for u in User.query.filter(User.id.in_(extra_user_ids)).all():
+                extra_users[u.id] = u
+
         messages_data = []
         for msg in messages:
-            sender = User.query.get(msg.sender_id)
+            sender = msg.sender
 
             file_url = None
             if msg.file_path:
@@ -1094,31 +1272,29 @@ def register_routes(app, db, login_manager):
             file_icon           = get_file_icon(msg.file_name) if msg.file_name else '📎'
 
             reply_to_data = None
-            if msg.reply_to_id:
-                reply_msg = Message.query.get(msg.reply_to_id)
-                if reply_msg:
-                    reply_sender = User.query.get(reply_msg.sender_id)
-                    reply_to_data = {
-                        'id': reply_msg.id,
-                        'sender_id': reply_msg.sender_id,
-                        'sender_name': reply_sender.username if reply_sender else 'Unknown',
-                        'content': reply_msg.content[:100] if reply_msg.content else None,
-                        'has_image': bool(reply_msg.image_path),
-                        'has_file': bool(reply_msg.file_path),
-                        'file_name': reply_msg.file_name
-                    }
+            if msg.reply_to:
+                reply_msg    = msg.reply_to
+                reply_sender = extra_users.get(reply_msg.sender_id) or reply_msg.sender
+                reply_to_data = {
+                    'id': reply_msg.id,
+                    'sender_id': reply_msg.sender_id,
+                    'sender_name': reply_sender.username if reply_sender else 'Unknown',
+                    'content': reply_msg.content[:100] if reply_msg.content else None,
+                    'has_image': bool(reply_msg.image_path),
+                    'has_file': bool(reply_msg.file_path),
+                    'file_name': reply_msg.file_name
+                }
 
             forwarded_from_data = None
-            if msg.is_forwarded and msg.forwarded_from_id:
-                original_msg = Message.query.get(msg.forwarded_from_id)
-                if original_msg:
-                    original_sender = User.query.get(original_msg.sender_id)
-                    forwarded_from_data = {
-                        'id': original_msg.id,
-                        'sender_id': original_msg.sender_id,
-                        'sender_name': original_sender.username if original_sender else 'Unknown',
-                        'show_sender': msg.show_forward_sender
-                    }
+            if msg.is_forwarded and msg.forwarded_from:
+                original_msg    = msg.forwarded_from
+                original_sender = extra_users.get(original_msg.sender_id) or original_msg.sender
+                forwarded_from_data = {
+                    'id': original_msg.id,
+                    'sender_id': original_msg.sender_id,
+                    'sender_name': original_sender.username if original_sender else 'Unknown',
+                    'show_sender': msg.show_forward_sender
+                }
 
             messages_data.append({
                 'id': msg.id,
@@ -1152,9 +1328,13 @@ def register_routes(app, db, login_manager):
     @app.route('/download/<path:filepath>')
     @login_required
     def download_file(filepath):
+        from flask import make_response
         directory = os.path.join(app.config['UPLOAD_FOLDER'], os.path.dirname(filepath))
         filename  = os.path.basename(filepath)
-        return send_from_directory(directory, filename, as_attachment=True)
+        response  = make_response(send_from_directory(directory, filename, as_attachment=True))
+        # Кэшируем файлы на 7 дней (они иммутабельны — uuid в имени)
+        response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
+        return response
 
     @app.route('/delete_message/<int:message_id>', methods=['POST'])
     @login_required
@@ -1313,11 +1493,11 @@ def register_routes(app, db, login_manager):
                 Message.chat_id == context_id,
                 Message.content.ilike(f'%{query_str}%'),
                 Message.is_deleted == False
-            ).order_by(Message.timestamp.desc()).limit(50).all()
+            ).options(joinedload(Message.sender)).order_by(Message.timestamp.desc()).limit(50).all()
 
         result = []
         for msg in messages:
-            sender = User.query.get(msg.sender_id)
+            sender = msg.sender
             result.append({
                 'id': msg.id, 'content': msg.content,
                 'sender_name': sender.username if sender else 'Unknown',
@@ -1329,8 +1509,6 @@ def register_routes(app, db, login_manager):
     # ============================================================
     # ВОССТАНОВЛЕНИЕ ПАРОЛЯ
     # ============================================================
-
-    from datetime import timedelta
 
     @app.route('/forgot_password', methods=['GET', 'POST'])
     def forgot_password():
@@ -1402,8 +1580,8 @@ def register_routes(app, db, login_manager):
             if not user:
                 return render_template('forgot_password.html', error='Пользователь не найден')
 
-            user.password        = generate_password_hash(new_password)
-            reset_request.used   = True
+            user.password      = generate_password_hash(new_password)
+            reset_request.used = True
             db.session.commit()
 
             try:
@@ -1439,9 +1617,9 @@ def register_routes(app, db, login_manager):
 
         result = []
         if media_type == 'images':
-            msgs = base_query.filter(Message.image_path != None).order_by(Message.timestamp.desc()).limit(100).all()
+            msgs = base_query.filter(Message.image_path != None).options(joinedload(Message.sender)).order_by(Message.timestamp.desc()).limit(100).all()
             for msg in msgs:
-                sender = User.query.get(msg.sender_id)
+                sender = msg.sender
                 result.append({
                     'id': msg.id,
                     'url': url_for('download_file', filepath=msg.image_path),
@@ -1449,9 +1627,9 @@ def register_routes(app, db, login_manager):
                     'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M')
                 })
         elif media_type == 'files':
-            msgs = base_query.filter(Message.file_path != None).order_by(Message.timestamp.desc()).limit(100).all()
+            msgs = base_query.filter(Message.file_path != None).options(joinedload(Message.sender)).order_by(Message.timestamp.desc()).limit(100).all()
             for msg in msgs:
-                sender = User.query.get(msg.sender_id)
+                sender = msg.sender
                 result.append({
                     'id': msg.id,
                     'url': url_for('download_file', filepath=msg.file_path),
@@ -1462,9 +1640,9 @@ def register_routes(app, db, login_manager):
                     'timestamp': msg.timestamp.strftime('%d.%m.%Y %H:%M')
                 })
         elif media_type == 'links':
-            msgs = base_query.filter(Message.link_url != None).order_by(Message.timestamp.desc()).limit(100).all()
+            msgs = base_query.filter(Message.link_url != None).options(joinedload(Message.sender)).order_by(Message.timestamp.desc()).limit(100).all()
             for msg in msgs:
-                sender = User.query.get(msg.sender_id)
+                sender = msg.sender
                 result.append({
                     'id': msg.id,
                     'url': msg.link_url,
