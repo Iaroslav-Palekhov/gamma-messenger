@@ -16,3 +16,4 @@ bs4
 requests
 cryptography
 user-agents
+flask-compress
