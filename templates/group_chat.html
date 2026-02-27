@@ -8,9 +8,16 @@
     .chat-container {
         display: flex;
         flex-direction: column;
+        height: 100dvh;
         height: 100vh;
+        max-height: -webkit-fill-available;
         background: var(--bg-primary);
         overflow: hidden;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
     }
 
     /* Шапка чата */
@@ -972,7 +979,12 @@
     // Прокрутка вниз при загрузке
     window.onload = function() {
         const container = document.getElementById('messagesContainer');
-        if (container) container.scrollTop = container.scrollHeight;
+        if (container) {
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+                setTimeout(() => { container.scrollTop = container.scrollHeight; }, 150);
+            });
+        }
         setTimeout(updateMessages, 1000);
     };
 
@@ -1223,15 +1235,25 @@
         const tempMessageId = 'temp_' + Date.now();
         const senderName = '{{ current_user.username }}';
 
+        // Показываем превью ответа в временном сообщении
+        let replyPreviewHtml = '';
+        if (replyToId && window._replyData) {
+            replyPreviewHtml = `
+                <div class="reply-preview">
+                    <div class="reply-sender">${escapeHtml(window._replyData.sender_name)}</div>
+                    <div class="reply-content">${escapeHtml(window._replyData.preview || '')}</div>
+                </div>`;
+        }
+
         const tempMessageHtml = `
             <div class="message sent sending" data-message-id="${tempMessageId}">
                 <div class="message-wrapper">
                     <div class="message-bubble">
                         <div style="font-weight: 600; margin-bottom: 4px; color: var(--accent);">${escapeHtml(senderName)}</div>
+                        ${replyPreviewHtml}
                         <div class="message-content">
-                            ${hasFile ?
-                                '<div class="file-message sending"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">' + escapeHtml(fileInput.files[0].name) + '</div><div class="file-size">Отправка...</div></div></div>' :
-                                '<p style="white-space: pre-wrap; word-break: break-word; margin: 0;">' + escapeHtml(messageText) + '</p>'}
+                            ${hasFile ? '<div class="file-message sending"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">' + escapeHtml(fileInput.files[0].name) + '</div><div class="file-size">Отправка...</div></div></div>' : ''}
+                            ${messageText.trim() ? '<p style="white-space: pre-wrap; word-break: break-word; margin: ' + (hasFile ? '6px 0 0 0' : '0') + ';">' + escapeHtml(messageText) + '</p>' : ''}
                         </div>
                         <div class="message-meta">
                             <span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
@@ -1259,15 +1281,13 @@
                     tempMessage.dataset.messageId = data.message_id;
                     tempMessage.classList.remove('sending');
 
-                    // Обновляем контент если был файл/изображение
-                    if (data.image_path) {
-                        const contentDiv = tempMessage.querySelector('.message-content');
-                        if (contentDiv) {
-                            contentDiv.innerHTML = `<img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
-                        }
-                    } else if (data.file_path) {
-                        const contentDiv = tempMessage.querySelector('.message-content');
-                        if (contentDiv) {
+                    // Обновляем контент: файл + текст могут быть одновременно
+                    const contentDiv = tempMessage.querySelector('.message-content');
+                    if (contentDiv) {
+                        let newContentHtml = '';
+                        if (data.image_path) {
+                            newContentHtml += `<img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
+                        } else if (data.file_path) {
                             const fileName = data.file_name || 'Файл';
                             const ext = fileName.split('.').pop().toLowerCase();
                             let fileIcon = '';
@@ -1280,19 +1300,29 @@
                             } else {
                                 fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-file"></use></svg>';
                             }
-                            contentDiv.innerHTML = `
-                                <div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')">
-                                    <span class="file-icon">${fileIcon}</span>
-                                    <div class="file-info">
-                                        <div class="file-name">${escapeHtml(fileName)}</div>
-                                        <div class="file-size">${data.file_size || '0 KB'}</div>
-                                    </div>
-                                    <span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span>
-                                </div>`;
+                            newContentHtml += `<div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')"><span class="file-icon">${fileIcon}</span><div class="file-info"><div class="file-name">${escapeHtml(fileName)}</div><div class="file-size">${data.file_size || '0 KB'}</div></div><span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span></div>`;
+                        }
+                        if (data.content) {
+                            const escapedText = escapeHtml(data.content);
+                            const withBreaks = escapedText.replace(/\n/g, '<br>');
+                            newContentHtml += `<p style="white-space: pre-wrap; word-break: break-word; margin: ${(data.file_path || data.image_path) ? '6px 0 0 0' : '0'};">${withBreaks}</p>`;
+                        }
+                        if (data.image_path || data.file_path) {
+                            contentDiv.innerHTML = newContentHtml;
+                        }
+
+                        // Если сервер вернул ссылку — сразу добавляем превью
+                        if (data.link_url && !contentDiv.querySelector('.link-preview')) {
+                            injectLinkPreview(contentDiv, data);
                         }
                     }
 
-                    // Добавляем статус и кнопки действий
+                    // Если ссылки ещё нет — polling
+                    if (!data.link_url) {
+                        pollForLinkPreview(data.message_id, tempMessage);
+                    }
+
+                    // Добавляем статус и кнопки действий (включая pin)
                     const meta = tempMessage.querySelector('.message-meta');
                     if (meta && !meta.querySelector('.read-status')) {
                         meta.insertAdjacentHTML('beforeend', `
@@ -1311,6 +1341,15 @@
                                     </button>
                                     <button class="message-action-btn" onclick="forwardMessage(${data.message_id})" title="Переслать">
                                         <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg>
+                                    </button>
+                                    <button class="message-action-btn" onclick="pinMessage(${data.message_id})" title="Закрепить" style="color:var(--accent);">
+                                        <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>
+                                    </button>
+                                    ${data.content ? `<button class="message-action-btn" onclick="editMessage(${data.message_id}, this)" title="Редактировать">
+                                        <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>
+                                    </button>` : ''}
+                                    <button class="message-action-btn" onclick="deleteMessage(${data.message_id})" title="Удалить" style="color:var(--danger);">
+                                        <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
                                     </button>
                                 </div>`);
                         }
@@ -1341,6 +1380,46 @@
                 </svg>
             `;
         });
+    }
+
+    // Вставка превью ссылки в элемент контента
+    function injectLinkPreview(contentDiv, data) {
+        if (!data.link_url) return;
+        const linkHtml = `
+            <div class="link-preview" onclick="window.open('${escapeHtml(data.link_url)}', '_blank')">
+                ${data.link_image ? `<div class="link-preview-image"><img src="${escapeHtml(data.link_image)}" alt="" onerror="this.parentElement.style.display='none'"></div>` : ''}
+                <div class="link-preview-content">
+                    ${data.link_title ? `<div class="link-preview-title">${escapeHtml(data.link_title)}</div>` : ''}
+                    ${data.link_description ? `<div class="link-preview-description">${escapeHtml(data.link_description.substring(0, 200))}${data.link_description.length > 200 ? '...' : ''}</div>` : ''}
+                    <div class="link-preview-url">${escapeHtml(data.link_url)}</div>
+                </div>
+            </div>`;
+        contentDiv.insertAdjacentHTML('beforeend', linkHtml);
+    }
+
+    // Polling для link preview: опрашиваем сервер пока не получим превью (макс 6 попыток)
+    function pollForLinkPreview(messageId, messageEl, attempts) {
+        attempts = attempts || 0;
+        if (attempts >= 8) return;
+        setTimeout(() => {
+            fetch(`/get_messages/${currentGroupId}?last_id=${messageId - 1}&is_group=true`)
+                .then(r => r.json())
+                .then(messages => {
+                    const msg = messages.find(m => m.id == messageId);
+                    if (msg && msg.link_url) {
+                        const el = document.querySelector(`.message[data-message-id="${messageId}"]`) || messageEl;
+                        if (el) {
+                            const contentDiv = el.querySelector('.message-content');
+                            if (contentDiv && !contentDiv.querySelector('.link-preview')) {
+                                injectLinkPreview(contentDiv, msg);
+                            }
+                        }
+                    } else {
+                        pollForLinkPreview(messageId, messageEl, attempts + 1);
+                    }
+                })
+                .catch(() => {});
+        }, 2000);
     }
 
     // Функция восстановления при ошибке
@@ -1530,19 +1609,53 @@
         messageInput.focus();
         replyToId = messageId;
 
+        // Сохраняем данные ответа из DOM для отображения в пузыре
+        const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
+        if (messageElement) {
+            let replySenderName = 'Пользователь';
+            if (messageElement.classList.contains('sent')) {
+                replySenderName = '{{ current_user.username }}';
+            } else {
+                // В групповом чате имя отправителя — первый div с font-weight:600 в bubble
+                const nameDivs = messageElement.querySelectorAll('.message-bubble > div');
+                for (const div of nameDivs) {
+                    const style = div.getAttribute('style') || '';
+                    if (style.includes('font-weight') && div.textContent.trim()) {
+                        replySenderName = div.textContent.trim();
+                        break;
+                    }
+                }
+            }
+
+            const contentEl = messageElement.querySelector('.message-content');
+            let replyContentPreview = '';
+            if (contentEl) {
+                const p = contentEl.querySelector('p');
+                const img = contentEl.querySelector('.message-image');
+                const file = contentEl.querySelector('.file-name');
+                if (p) replyContentPreview = p.textContent.trim().substring(0, 50);
+                else if (img) replyContentPreview = '📷 Фото';
+                else if (file) replyContentPreview = '📎 ' + file.textContent.trim();
+            }
+
+            window._replyData = { id: messageId, sender_name: replySenderName, preview: replyContentPreview };
+        }
+
         const indicator = document.getElementById('replyIndicator');
         indicator.style.display = 'flex';
+        const senderDisplay = window._replyData ? escapeHtml(window._replyData.sender_name) : 'Пользователь';
+        const previewDisplay = window._replyData ? escapeHtml(window._replyData.preview) : '';
         indicator.innerHTML = `
-            <div style="display: flex; align-items: center; gap: 10px; flex: 1;">
-                <span>
-                    <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; margin-right: 8px;">
-                        <use xlink:href="#icon-back"></use>
-                    </svg>
-                    Ответ на сообщение
-                </span>
-                <span style="color: var(--text-secondary); font-size: 12px;">Нажмите ESC для отмены</span>
+            <div style="display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;">
+                <svg width="20" height="20" viewBox="0 0 1024 1024" style="vertical-align: middle; flex-shrink: 0; color: var(--accent);">
+                    <use xlink:href="#icon-back"></use>
+                </svg>
+                <div style="min-width: 0;">
+                    <div style="font-size: 12px; font-weight: 600; color: var(--accent);">${senderDisplay}</div>
+                    ${previewDisplay ? `<div style="font-size: 12px; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${previewDisplay}</div>` : ''}
+                </div>
             </div>
-            <span onclick="cancelReply()" style="cursor: pointer; color: var(--danger);">
+            <span onclick="cancelReply()" style="cursor: pointer; color: var(--danger); flex-shrink: 0;">
                 <svg width="18" height="18" viewBox="0 0 1024 1024">
                     <use xlink:href="#icon-delete"></use>
                 </svg>
@@ -1555,6 +1668,7 @@
         const indicator = document.getElementById('replyIndicator');
         indicator.style.display = 'none';
         replyToId = null;
+        window._replyData = null;
         document.getElementById('messageInput').placeholder = 'Введите сообщение...';
     }
 
@@ -1747,6 +1861,16 @@
                 if (data.success) {
                     showNotification('Сообщение закреплено', 'success');
                     refreshPinnedBanner();
+                    // Обновляем кнопку в DOM — заменяем «Закрепить» на «Открепить»
+                    const msg = document.querySelector(`.message[data-message-id="${messageId}"]`);
+                    if (msg) {
+                        const pinBtn = msg.querySelector(`button[onclick="pinMessage(${messageId})"]`);
+                        if (pinBtn) {
+                            pinBtn.title = 'Открепить';
+                            pinBtn.style.opacity = '0.6';
+                            pinBtn.setAttribute('onclick', `unpinMessage(${messageId})`);
+                        }
+                    }
                 } else {
                     alert(data.error || 'Ошибка');
                 }
@@ -1761,6 +1885,16 @@
                 if (data.success) {
                     showNotification('Сообщение откреплено', 'info');
                     refreshPinnedBanner();
+                    // Обновляем кнопку в DOM — заменяем «Открепить» на «Закрепить»
+                    const msg = document.querySelector(`.message[data-message-id="${messageId}"]`);
+                    if (msg) {
+                        const unpinBtn = msg.querySelector(`button[onclick="unpinMessage(${messageId})"]`);
+                        if (unpinBtn) {
+                            unpinBtn.title = 'Закрепить';
+                            unpinBtn.style.opacity = '1';
+                            unpinBtn.setAttribute('onclick', `pinMessage(${messageId})`);
+                        }
+                    }
                 } else {
                     alert(data.error || 'Ошибка');
                 }

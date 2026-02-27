@@ -4,24 +4,46 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Messenger{% endblock %}</title>
-    <link rel="icon" type="image/png" href="/static/icon/favicon-96x96.png" sizes="96x96" />
-    <link rel="icon" type="image/svg+xml" href="/static/icon/favicon.svg" />
-    <link rel="shortcut icon" href="/static/icon/favicon.ico" />
-    <link rel="apple-touch-icon" sizes="180x180" href="/static/icon/apple-touch-icon.png" />
-    <meta name="apple-mobile-web-app-title" content="gamma" />
-    <link rel="manifest" href="/static/icon/site.webmanifest" />
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <!-- Preconnect для ускорения -->
+    <meta name="theme-color" content="#0b141a">
+    <!-- Favicon: только самые нужные форматы -->
+    <link rel="icon" href="/static/icon/favicon.ico" sizes="any">
+    <link rel="icon" type="image/svg+xml" href="/static/icon/favicon.svg">
+    <link rel="apple-touch-icon" href="/static/icon/apple-touch-icon.png">
+    <link rel="manifest" href="/static/icon/site.webmanifest">
+    <!-- CSS: preload + rel=stylesheet для быстрой загрузки -->
+    <link rel="preload" href="{{ url_for('static', filename='css/style.css') }}" as="style" onload="this.onload=null;this.rel='stylesheet'">
+    <noscript><link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"></noscript>
+    <!-- Критический инлайн CSS — рендерит форму мгновенно без ожидания style.css -->
     <style>
-        /* Context menu styles — статически в HTML, не через JS */
+        :root{--bg-primary:#0b141a;--bg-secondary:#1f2c33;--accent:#00a884;--text-primary:#fff;--text-secondary:#8696a0;--border:#3c4a53;--danger:#df4949;--radius-lg:30px;--radius-md:12px;--shadow:0 20px 40px rgba(0,0,0,.4)}
+        *{margin:0;padding:0;box-sizing:border-box;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif}
+        body{background:var(--bg-primary);color:var(--text-primary);min-height:100vh;font-size:14px;line-height:1.5}
+        .auth-wrapper{display:flex;justify-content:center;align-items:center;min-height:100vh}
+        .auth-container{max-width:400px;width:100%;background:var(--bg-secondary);border-radius:var(--radius-lg);padding:40px 30px;border:1px solid rgba(255,255,255,.08);box-shadow:var(--shadow)}
+        .form-group{margin-bottom:16px}
+        .form-group label{display:block;margin-bottom:6px;color:var(--text-secondary);font-size:13px}
+        .form-group input{width:100%;padding:12px 16px;background:#2a3942;border:1px solid var(--border);border-radius:var(--radius-md);color:var(--text-primary);font-size:14px;outline:none;transition:border-color .2s}
+        .form-group input:focus{border-color:var(--accent)}
+        .btn{padding:14px 20px;border:none;border-radius:var(--radius-md);background:var(--accent);color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:background .2s}
+        .btn:hover{background:#039b7b}
+        .btn-block{width:100%;display:block}
+        .error-message{background:rgba(223,73,73,.15);border:1px solid var(--danger);color:var(--danger);padding:12px 16px;border-radius:var(--radius-md);margin-bottom:16px;font-size:14px}
+        .logo{text-align:center;margin-bottom:40px}
+        .logo-icon{background:var(--accent);width:80px;height:80px;border-radius:50%;margin:0 auto 15px;display:flex;align-items:center;justify-content:center;color:#fff}
+        .logo h1{font-size:28px;font-weight:600}
+        .auth-link{text-align:center;margin-top:15px;color:var(--text-secondary);font-size:14px}
+        .auth-link a{color:var(--accent);text-decoration:none}
+        /* Context menu */
         .context-menu{position:fixed;background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:8px 0;min-width:200px;box-shadow:0 5px 20px rgba(0,0,0,.3);z-index:10000;opacity:0;transform:scale(.95);transition:opacity .2s,transform .2s;pointer-events:none}
         .context-menu.active{opacity:1;transform:scale(1);pointer-events:all}
         .context-menu-item{padding:12px 16px;display:flex;align-items:center;gap:12px;color:var(--text-primary);cursor:pointer;transition:background .2s;font-size:14px}
-        .context-menu-item:hover{background:var(--bg-hover)}
+        .context-menu-item:hover{background:#2e3e48}
         .context-menu-item svg{width:18px;height:18px;color:var(--text-secondary)}
         .context-menu-item.delete-item{color:var(--danger)}
         .context-menu-item.delete-item svg{color:var(--danger)}
         .context-menu-divider{height:1px;background:var(--border);margin:8px 0}
-        .message.selected{position:relative;outline:2px solid var(--accent);outline-offset:2px;border-radius:12px}
+        .message.selected{outline:2px solid var(--accent);outline-offset:2px;border-radius:12px}
         .selection-toolbar{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--bg-secondary);border:1px solid var(--border);border-radius:30px;padding:10px 20px;display:flex;align-items:center;gap:20px;box-shadow:0 5px 20px rgba(0,0,0,.3);z-index:10001;animation:slideUp .3s ease}
         .selection-info{color:var(--text-primary);font-weight:600;padding-right:20px;border-right:1px solid var(--border)}
         .selection-actions{display:flex;gap:10px}
@@ -31,606 +53,163 @@
     {% block extra_css %}{% endblock %}
 </head>
 <body>
-    <!-- SVG Sprite -->
+    <!-- SVG Sprite (скрыт, загружается сразу — нужен для иконок) -->
     {% include "svg_sprite.html" %}
     
     {% block content %}{% endblock %}
     
     {% block scripts %}
-    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
-    <script>
-        // Контекстное меню для сообщений
+    <!-- JS грузим defer — не блокирует рендер -->
+    <script defer src="{{ url_for('static', filename='js/script.js') }}"></script>
+    <script defer>
+document.addEventListener('DOMContentLoaded',function(){
+// Lazy load images
+if('IntersectionObserver' in window){
+  var io=new IntersectionObserver(function(entries){entries.forEach(function(e){if(e.isIntersecting){var img=e.target;if(img.dataset.src){img.src=img.dataset.src;delete img.dataset.src;io.unobserve(img)}}})},{rootMargin:'200px'});
+  document.querySelectorAll('img[data-src]').forEach(function(img){io.observe(img)});
+}
+
+// Context menu
 class MessageContextMenu {
     constructor() {
         this.menu = null;
         this.currentMessageId = null;
         this.init();
     }
-
     init() {
-        // Создаем меню
         this.createMenu();
-        
-        // Глобальный перехват ПКМ на всей странице
         document.addEventListener('contextmenu', (e) => {
-            e.preventDefault(); // Всегда отключаем стандартное меню браузера
-            
-            // Проверяем, кликнули ли на сообщение
+            e.preventDefault();
             const messageElement = e.target.closest('.message');
-            if (messageElement) {
-                // Если на сообщении - показываем наше меню
-                this.showMenu(e, messageElement);
-            }
-            // Если не на сообщении - ничего не делаем, меню не показывается
+            if (messageElement) this.showMenu(e, messageElement);
         });
-
-        // Глобальный перехват длительного нажатия на мобильных
         let pressTimer;
         let isLongPress = false;
-        
         document.addEventListener('touchstart', (e) => {
-            // Проверяем, нажали ли на сообщение
             const messageElement = e.target.closest('.message');
             if (!messageElement) return;
-            
             pressTimer = setTimeout(() => {
                 isLongPress = true;
                 e.preventDefault();
                 this.showMenu(e, messageElement);
             }, 500);
         });
-
         document.addEventListener('touchend', (e) => {
             clearTimeout(pressTimer);
-            // Если это было длительное нажатие, отменяем стандартное поведение
-            if (isLongPress) {
-                e.preventDefault();
-                isLongPress = false;
-            }
+            if (isLongPress) { e.preventDefault(); isLongPress = false; }
         });
-
-        document.addEventListener('touchmove', (e) => {
-            clearTimeout(pressTimer);
-            isLongPress = false;
-        });
-
-        document.addEventListener('touchcancel', (e) => {
-            clearTimeout(pressTimer);
-            isLongPress = false;
-        });
-
-        // Обработчик для закрытия меню
+        document.addEventListener('touchmove', () => { clearTimeout(pressTimer); isLongPress = false; });
+        document.addEventListener('touchcancel', () => { clearTimeout(pressTimer); isLongPress = false; });
         document.addEventListener('click', (e) => this.hideMenu(e));
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') this.hideMenu();
-        });
-
-        // Предотвращаем появление стандартного меню на мобильных после длительного нажатия
-        document.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-        });
+        document.addEventListener('keydown', (e) => { if (e.key === 'Escape') this.hideMenu(); });
     }
-
     createMenu() {
-        // Удаляем существующее меню, если есть
-        const existingMenu = document.getElementById('messageContextMenu');
-        if (existingMenu) existingMenu.remove();
-
-        // Создаем новое меню
+        const existing = document.getElementById('messageContextMenu');
+        if (existing) existing.remove();
         this.menu = document.createElement('div');
         this.menu.id = 'messageContextMenu';
         this.menu.className = 'context-menu';
         this.menu.innerHTML = `
-            <div class="context-menu-item" data-action="copy">
-                <svg width="18" height="18" viewBox="0 0 1024 1024">
-                    <use xlink:href="#icon-copy"></use>
-                </svg>
-                <span>Копировать текст</span>
-            </div>
-            <div class="context-menu-item" data-action="reply">
-                <svg width="18" height="18" viewBox="0 0 1024 1024">
-                    <use xlink:href="#icon-back"></use>
-                </svg>
-                <span>Ответить</span>
-            </div>
-            <div class="context-menu-item" data-action="forward">
-                <svg width="18" height="18" viewBox="0 0 24 24">
-                    <use xlink:href="#icon-group"></use>
-                </svg>
-                <span>Переслать</span>
-            </div>
+            <div class="context-menu-item" data-action="copy"><svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-copy"></use></svg><span>Копировать текст</span></div>
+            <div class="context-menu-item" data-action="reply"><svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-back"></use></svg><span>Ответить</span></div>
+            <div class="context-menu-item" data-action="forward"><svg width="18" height="18" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg><span>Переслать</span></div>
             <div class="context-menu-divider"></div>
-            <div class="context-menu-item" data-action="download">
-                <svg width="18" height="18" viewBox="0 0 1024 1024">
-                    <use xlink:href="#icon-download"></use>
-                </svg>
-                <span>Скачать файл</span>
-            </div>
+            <div class="context-menu-item" data-action="download"><svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-download"></use></svg><span>Скачать файл</span></div>
             <div class="context-menu-divider" id="fileDivider"></div>
-            <div class="context-menu-item" data-action="select">
-                <svg width="18" height="18" viewBox="0 0 1024 1024">
-                    <use xlink:href="#icon-check"></use>
-                </svg>
-                <span>Выбрать</span>
-            </div>
-            <div class="context-menu-item delete-item" data-action="delete">
-                <svg width="18" height="18" viewBox="0 0 1024 1024">
-                    <use xlink:href="#icon-delete"></use>
-                </svg>
-                <span>Удалить</span>
-            </div>
+            <div class="context-menu-item" data-action="select"><svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg><span>Выбрать</span></div>
+            <div class="context-menu-item delete-item" data-action="delete"><svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg><span>Удалить</span></div>
         `;
-
         document.body.appendChild(this.menu);
-
-        // Добавляем обработчики для пунктов меню
         this.menu.querySelectorAll('.context-menu-item').forEach(item => {
-            item.addEventListener('click', (e) => {
-                e.stopPropagation();
-                const action = item.dataset.action;
-                this.handleAction(action);
-            });
+            item.addEventListener('click', (e) => { e.stopPropagation(); this.handleAction(item.dataset.action); });
         });
     }
-
     showMenu(event, messageElement) {
-        // Скрываем предыдущее меню
         this.hideMenu();
-
-        // Получаем ID сообщения
         this.currentMessageId = messageElement.dataset.messageId;
-        
-        // Определяем тип сообщения (текст, файл, изображение)
         const hasFile = messageElement.querySelector('.file-message');
         const hasImage = messageElement.querySelector('.message-image');
-        const hasText = messageElement.querySelector('.message-content p, .message-content');
-
-        // Показываем/скрываем соответствующие пункты меню
         const copyItem = this.menu.querySelector('[data-action="copy"]');
         const downloadItem = this.menu.querySelector('[data-action="download"]');
         const fileDivider = this.menu.querySelector('#fileDivider');
-
-        if (copyItem) {
-            // Проверяем наличие текста в сообщении
-            const textContent = this.getMessageText(messageElement);
-            copyItem.style.display = textContent ? 'flex' : 'none';
-        }
-        
-        if (downloadItem && fileDivider) {
-            const showFileOptions = hasFile || hasImage;
-            downloadItem.style.display = showFileOptions ? 'flex' : 'none';
-            fileDivider.style.display = showFileOptions ? 'block' : 'none';
-        }
-
-        // Позиционируем меню
-        let x, y;
-
-        if (event.touches) {
-            // Для touch событий
-            x = event.touches[0].clientX;
-            y = event.touches[0].clientY;
-        } else {
-            // Для mouse событий
-            x = event.clientX;
-            y = event.clientY;
-        }
-
-        // Проверяем границы экрана
-        const menuWidth = this.menu.offsetWidth;
-        const menuHeight = this.menu.offsetHeight;
-        const windowWidth = window.innerWidth;
-        const windowHeight = window.innerHeight;
-
-        if (x + menuWidth > windowWidth) {
-            x = windowWidth - menuWidth - 10;
-        }
-        if (y + menuHeight > windowHeight) {
-            y = windowHeight - menuHeight - 10;
-        }
-
+        if (copyItem) { const t = this.getMessageText(messageElement); copyItem.style.display = t ? 'flex' : 'none'; }
+        if (downloadItem && fileDivider) { const show = hasFile || hasImage; downloadItem.style.display = show ? 'flex' : 'none'; fileDivider.style.display = show ? 'block' : 'none'; }
+        let x = event.touches ? event.touches[0].clientX : event.clientX;
+        let y = event.touches ? event.touches[0].clientY : event.clientY;
+        const mw = this.menu.offsetWidth, mh = this.menu.offsetHeight;
+        if (x + mw > window.innerWidth) x = window.innerWidth - mw - 10;
+        if (y + mh > window.innerHeight) y = window.innerHeight - mh - 10;
         this.menu.style.left = x + 'px';
         this.menu.style.top = y + 'px';
         this.menu.classList.add('active');
     }
-
-    // Вспомогательная функция для получения текста сообщения
     getMessageText(messageElement) {
-        // Ищем текст в разных возможных местах
-        const textParagraph = messageElement.querySelector('.message-content p');
-        if (textParagraph && textParagraph.textContent.trim()) {
-            return textParagraph.textContent.trim();
-        }
-        
-        // Если нет отдельного p, ищем прямой текст в message-content
-        const contentDiv = messageElement.querySelector('.message-content');
-        if (contentDiv) {
-            // Клонируем, чтобы убрать вложенные элементы
-            const clone = contentDiv.cloneNode(true);
-            // Удаляем изображения и файлы из клона
-            clone.querySelectorAll('img, .file-message, svg').forEach(el => el.remove());
-            const text = clone.textContent.trim();
-            if (text) return text;
-        }
-        
+        const p = messageElement.querySelector('.message-content p');
+        if (p && p.textContent.trim()) return p.textContent.trim();
+        const c = messageElement.querySelector('.message-content');
+        if (c) { const cl = c.cloneNode(true); cl.querySelectorAll('img,.file-message,svg').forEach(el=>el.remove()); const t = cl.textContent.trim(); if (t) return t; }
         return null;
     }
-
-    hideMenu(event) {
-        if (event && this.menu.contains(event.target)) return;
-        this.menu.classList.remove('active');
-    }
-
+    hideMenu(event) { if (event && this.menu.contains(event.target)) return; this.menu.classList.remove('active'); }
     handleAction(action) {
         const message = document.querySelector(`.message[data-message-id="${this.currentMessageId}"]`);
         if (!message) return;
-
         switch(action) {
-            case 'copy':
-                this.copyMessageText(message);
-                break;
-            case 'reply':
-                if (typeof replyToMessage === 'function') {
-                    replyToMessage(this.currentMessageId);
-                }
-                break;
-            case 'forward':
-                if (typeof forwardMessage === 'function') {
-                    forwardMessage(this.currentMessageId);
-                }
-                break;
-            case 'download':
-                this.downloadFile(message);
-                break;
-            case 'select':
-                this.selectMessage(message);
-                break;
-            case 'delete':
-                this.deleteMessage(message);
-                break;
+            case 'copy': this.copyMessageText(message); break;
+            case 'reply': if (typeof replyToMessage==='function') replyToMessage(this.currentMessageId); break;
+            case 'forward': if (typeof forwardMessage==='function') forwardMessage(this.currentMessageId); break;
+            case 'download': this.downloadFile(message); break;
+            case 'select': this.selectMessage(message); break;
+            case 'delete': this.deleteMessage(message); break;
         }
-
         this.hideMenu();
     }
-
     copyMessageText(message) {
         const text = this.getMessageText(message);
-        
         if (text) {
-            // Используем современный Clipboard API
             if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(text).then(() => {
-                    this.showNotification('Текст скопирован', 'success');
-                }).catch(err => {
-                    console.error('Ошибка копирования:', err);
-                    this.fallbackCopy(text);
-                });
-            } else {
-                // Fallback для старых браузеров
-                this.fallbackCopy(text);
-            }
-        } else {
-            this.showNotification('Нет текста для копирования', 'error');
-        }
+                navigator.clipboard.writeText(text).then(() => this.showNotification('Текст скопирован','success')).catch(() => this.fallbackCopy(text));
+            } else { this.fallbackCopy(text); }
+        } else { this.showNotification('Нет текста для копирования','error'); }
     }
-
-    // Запасной метод копирования для старых браузеров
     fallbackCopy(text) {
         try {
-            const textarea = document.createElement('textarea');
-            textarea.value = text;
-            textarea.style.position = 'fixed';
-            textarea.style.opacity = '0';
-            document.body.appendChild(textarea);
-            textarea.select();
-            textarea.setSelectionRange(0, 99999);
-            
-            const successful = document.execCommand('copy');
-            document.body.removeChild(textarea);
-            
-            if (successful) {
-                this.showNotification('Текст скопирован', 'success');
-            } else {
-                this.showNotification('Ошибка при копировании', 'error');
-            }
-        } catch (err) {
-            console.error('Ошибка при копировании:', err);
-            this.showNotification('Ошибка при копировании', 'error');
-        }
+            const ta = document.createElement('textarea'); ta.value = text; ta.style.cssText='position:fixed;opacity:0'; document.body.appendChild(ta); ta.select(); ta.setSelectionRange(0,99999);
+            const ok = document.execCommand('copy'); document.body.removeChild(ta);
+            this.showNotification(ok?'Текст скопирован':'Ошибка при копировании', ok?'success':'error');
+        } catch(e) { this.showNotification('Ошибка при копировании','error'); }
     }
-
     downloadFile(message) {
-        const fileMessage = message.querySelector('.file-message');
-        const image = message.querySelector('.message-image');
-        
-        if (fileMessage) {
-            // Для файлов
-            const onclickAttr = fileMessage.getAttribute('onclick');
-            if (onclickAttr) {
-                const match = onclickAttr.match(/'([^']+)'/g);
-                if (match && match.length >= 2) {
-                    const filePath = match[0].replace(/'/g, '');
-                    const fileName = match[1].replace(/'/g, '');
-                    
-                    const link = document.createElement('a');
-                    link.href = filePath;
-                    link.download = fileName;
-                    document.body.appendChild(link);
-                    link.click();
-                    document.body.removeChild(link);
-                    this.showNotification('Файл скачивается', 'success');
-                }
-            }
-        } else if (image) {
-            // Для изображений
-            const imgSrc = image.src;
-            const link = document.createElement('a');
-            link.href = imgSrc;
-            link.download = imgSrc.split('/').pop() || 'image.jpg';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            this.showNotification('Изображение скачивается', 'success');
+        const fm = message.querySelector('.file-message'), img = message.querySelector('.message-image');
+        if (fm) {
+            const oc = fm.getAttribute('onclick'); if (oc) { const m = oc.match(/'([^']+)'/g); if (m&&m.length>=2) { const a=document.createElement('a'); a.href=m[0].replace(/'/g,''); a.download=m[1].replace(/'/g,''); document.body.appendChild(a); a.click(); document.body.removeChild(a); this.showNotification('Файл скачивается','success'); } }
+        } else if (img) {
+            const a=document.createElement('a'); a.href=img.src; a.download=img.src.split('/').pop()||'image.jpg'; document.body.appendChild(a); a.click(); document.body.removeChild(a); this.showNotification('Изображение скачивается','success');
         }
     }
-
-    selectMessage(message) {
-        // Добавляем класс выделения
-        message.classList.toggle('selected');
-        
-        // Показываем панель с действиями для выбранных сообщений
-        this.showSelectionToolbar();
-    }
-
+    selectMessage(message) { message.classList.toggle('selected'); this.showSelectionToolbar(); }
     showSelectionToolbar() {
-        const selectedMessages = document.querySelectorAll('.message.selected');
-        
-        // Удаляем существующую панель, если есть
-        const existingToolbar = document.getElementById('selectionToolbar');
-        if (existingToolbar) existingToolbar.remove();
-
-        if (selectedMessages.length > 0) {
-            const toolbar = document.createElement('div');
-            toolbar.id = 'selectionToolbar';
-            toolbar.className = 'selection-toolbar';
-            toolbar.innerHTML = `
-                <div class="selection-info">
-                    Выбрано: ${selectedMessages.length}
-                </div>
-                <div class="selection-actions">
-                    <button class="btn-icon" onclick="window.forwardSelected &amp;&amp; forwardSelected()" title="Переслать">
-                        <svg width="20" height="20" viewBox="0 0 24 24">
-                            <use xlink:href="#icon-group"></use>
-                        </svg>
-                    </button>
-                    <button class="btn-icon" onclick="window.deleteSelected &amp;&amp; deleteSelected()" title="Удалить" style="color: var(--danger);">
-                        <svg width="20" height="20" viewBox="0 0 1024 1024">
-                            <use xlink:href="#icon-delete"></use>
-                        </svg>
-                    </button>
-                    <button class="btn-icon" onclick="window.clearSelection &amp;&amp; clearSelection()" title="Отмена">
-                        <svg width="20" height="20" viewBox="0 0 1024 1024">
-                            <use xlink:href="#icon-delete"></use>
-                        </svg>
-                    </button>
-                </div>
-            `;
-            document.body.appendChild(toolbar);
+        const sel = document.querySelectorAll('.message.selected');
+        const ex = document.getElementById('selectionToolbar'); if (ex) ex.remove();
+        if (sel.length > 0) {
+            const tb = document.createElement('div'); tb.id='selectionToolbar'; tb.className='selection-toolbar';
+            tb.innerHTML=`<div class="selection-info">Выбрано: ${sel.length}</div><div class="selection-actions"><button class="btn-icon" onclick="window.forwardSelected&&forwardSelected()" title="Переслать"><svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg></button><button class="btn-icon" onclick="window.deleteSelected&&deleteSelected()" title="Удалить" style="color:var(--danger)"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg></button><button class="btn-icon" onclick="window.clearSelection&&clearSelection()" title="Отмена"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg></button></div>`;
+            document.body.appendChild(tb);
         }
     }
-
-    deleteMessage(message) {
-        if (confirm('Удалить это сообщение?')) {
-            message.style.opacity = '0.5';
-            message.style.pointerEvents = 'none';
-            this.showNotification('Сообщение удалено', 'success');
-        }
-    }
-
-    showNotification(message, type) {
-        if (typeof window.showNotification === 'function') {
-            window.showNotification(message, type);
-        } else {
-            // Создаем временное уведомление, если функция не определена
-            const notification = document.createElement('div');
-            notification.className = `notification ${type}`;
-            notification.textContent = message;
-            notification.style.cssText = `
-                position: fixed;
-                top: 20px;
-                right: 20px;
-                padding: 15px 20px;
-                border-radius: 10px;
-                color: white;
-                z-index: 9999;
-                animation: slideIn 0.3s ease;
-                background: ${type === 'success' ? 'linear-gradient(135deg, #2ed573 0%, #1abc9c 100%)' : 'linear-gradient(135deg, #ff4757 0%, #ff3838 100%)'};
-            `;
-            document.body.appendChild(notification);
-            
-            setTimeout(() => {
-                notification.style.animation = 'slideOut 0.3s ease';
-                setTimeout(() => notification.remove(), 300);
-            }, 3000);
-        }
+    deleteMessage(message) { if (confirm('Удалить это сообщение?')) { message.style.opacity='0.5'; message.style.pointerEvents='none'; this.showNotification('Сообщение удалено','success'); } }
+    showNotification(msg, type) {
+        if (typeof window.showNotification==='function') { window.showNotification(msg,type); return; }
+        const n=document.createElement('div'); n.style.cssText=`position:fixed;top:20px;right:20px;padding:15px 20px;border-radius:10px;color:#fff;z-index:9999;animation:slideIn .3s ease;background:${type==='success'?'linear-gradient(135deg,#2ed573 0%,#1abc9c 100%)':'linear-gradient(135deg,#ff4757 0%,#ff3838 100%)'}`;
+        n.textContent=msg; document.body.appendChild(n); setTimeout(()=>{ n.style.opacity='0'; setTimeout(()=>n.remove(),300); },3000);
     }
 }
 
-// Функции для работы с выделенными сообщениями
-function forwardSelected() {
-    const selectedMessages = document.querySelectorAll('.message.selected');
-    if (selectedMessages.length === 1) {
-        if (typeof forwardMessage === 'function') {
-            forwardMessage(selectedMessages[0].dataset.messageId);
-        }
-    } else {
-        showNotification('Выберите одно сообщение для пересылки', 'info');
-    }
-    clearSelection();
-}
+window.forwardSelected=function(){const sel=document.querySelectorAll('.message.selected');if(sel.length===1&&typeof forwardMessage==='function')forwardMessage(sel[0].dataset.messageId);else if(typeof showNotification==='function')showNotification('Выберите одно сообщение','info');clearSelection()};
+window.deleteSelected=function(){const sel=document.querySelectorAll('.message.selected');if(confirm(`Удалить ${sel.length} сообщений?`)){sel.forEach(m=>{m.style.opacity='0.5';m.style.pointerEvents='none'});}clearSelection()};
+window.clearSelection=function(){document.querySelectorAll('.message.selected').forEach(m=>m.classList.remove('selected'));const tb=document.getElementById('selectionToolbar');if(tb)tb.remove()};
 
-function deleteSelected() {
-    const selectedMessages = document.querySelectorAll('.message.selected');
-    if (confirm(`Удалить ${selectedMessages.length} сообщений?`)) {
-        selectedMessages.forEach(msg => {
-            msg.style.opacity = '0.5';
-            msg.style.pointerEvents = 'none';
-        });
-        showNotification('Сообщения удалены', 'success');
-    }
-    clearSelection();
-}
-
-function clearSelection() {
-    document.querySelectorAll('.message.selected').forEach(msg => {
-        msg.classList.remove('selected');
-    });
-    const toolbar = document.getElementById('selectionToolbar');
-    if (toolbar) toolbar.remove();
-}
-
-// Добавляем SVG иконки
-function addContextMenuIcons() {
-    const svgSprites = document.querySelector('svg[style="display: none;"]');
-    if (svgSprites) {
-        const icons = `
-            <symbol id="icon-copy" viewBox="0 0 1024 1024">
-                <path d="M768 896H256c-35.3 0-64-28.7-64-64V256c0-35.3 28.7-64 64-64h512c35.3 0 64 28.7 64 64v576c0 35.3-28.7 64-64 64zM256 256v576h512V256H256z" fill="currentColor"/>
-                <path d="M640 128H384c-17.7 0-32 14.3-32 32v64h256v-64c0-17.7-14.3-32-32-32z" fill="currentColor"/>
-            </symbol>
-            <symbol id="icon-download" viewBox="0 0 1024 1024">
-                <path d="M512 768c-8.2 0-16.4-3.1-22.6-9.4l-213.4-213.4c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0L480 658.7V128c0-17.7 14.3-32 32-32s32 14.3 32 32v530.7l158.6-158.6c12.5-12.5 32.8-12.5 45.3 0s12.5 32.8 0 45.3L534.6 758.6c-6.2 6.3-14.4 9.4-22.6 9.4z" fill="currentColor"/>
-                <path d="M832 896H192c-35.3 0-64-28.7-64-64v-64c0-17.7 14.3-32 32-32s32 14.3 32 32v64h640v-64c0-17.7 14.3-32 32-32s32 14.3 32 32v64c0 35.3-28.7 64-64 64z" fill="currentColor"/>
-            </symbol>
-        `;
-        svgSprites.insertAdjacentHTML('beforeend', icons);
-    }
-}
-
-// Добавляем стили
-function addContextMenuStyles() {
-    const style = document.createElement('style');
-    style.textContent = `
-        .context-menu {
-            position: fixed;
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 12px;
-            padding: 8px 0;
-            min-width: 200px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            z-index: 10000;
-            opacity: 0;
-            transform: scale(0.95);
-            transition: opacity 0.2s, transform 0.2s;
-            pointer-events: none;
-        }
-
-        .context-menu.active {
-            opacity: 1;
-            transform: scale(1);
-            pointer-events: all;
-        }
-
-        .context-menu-item {
-            padding: 12px 16px;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: var(--text-primary);
-            cursor: pointer;
-            transition: background 0.2s;
-            font-size: 14px;
-        }
-
-        .context-menu-item:hover {
-            background: var(--bg-hover);
-        }
-
-        .context-menu-item svg {
-            width: 18px;
-            height: 18px;
-            color: var(--text-secondary);
-        }
-
-        .context-menu-item.delete-item {
-            color: var(--danger);
-        }
-
-        .context-menu-item.delete-item svg {
-            color: var(--danger);
-        }
-
-        .context-menu-divider {
-            height: 1px;
-            background: var(--border);
-            margin: 8px 0;
-        }
-
-        .message.selected {
-            position: relative;
-            outline: 2px solid var(--accent);
-            outline-offset: 2px;
-            border-radius: 12px;
-        }
-
-        .selection-toolbar {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: var(--bg-secondary);
-            border: 1px solid var(--border);
-            border-radius: 30px;
-            padding: 10px 20px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
-            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
-            z-index: 10001;
-            animation: slideUp 0.3s ease;
-        }
-
-        .selection-info {
-            color: var(--text-primary);
-            font-weight: 600;
-            padding-right: 20px;
-            border-right: 1px solid var(--border);
-        }
-
-        .selection-actions {
-            display: flex;
-            gap: 10px;
-        }
-
-        @keyframes slideUp {
-            from {
-                transform: translate(-50%, 100%);
-                opacity: 0;
-            }
-            to {
-                transform: translate(-50%, 0);
-                opacity: 1;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .context-menu {
-                min-width: 180px;
-            }
-
-            .selection-toolbar {
-                width: 90%;
-                justify-content: space-between;
-            }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-// Инициализация при загрузке страницы
-document.addEventListener('DOMContentLoaded', () => {
-    addContextMenuIcons();
-    new MessageContextMenu();
+new MessageContextMenu();
 });
     </script>
     {% endblock %}

@@ -6,8 +6,16 @@
 .chat-container {
     display: flex;
     flex-direction: column;
+    height: 100dvh;
     height: 100vh;
+    max-height: -webkit-fill-available;
     background: var(--bg-primary);
+    overflow: hidden;
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
 }
 .chat-header {
     padding: 15px 20px;
@@ -50,6 +58,7 @@
 }
 .messages-container {
     flex: 1;
+    min-height: 0;
     padding: 20px;
     overflow-y: auto;
     background: #0e1c26;
@@ -633,7 +642,14 @@ function escapeHtml(unsafe) {
 // Прокрутка вниз при загрузке
 window.onload = function() {
     const container = document.getElementById('messagesContainer');
-    if (container) container.scrollTop = container.scrollHeight;
+    if (container) {
+        // requestAnimationFrame гарантирует что DOM уже отрисован
+        requestAnimationFrame(() => {
+            container.scrollTop = container.scrollHeight;
+            // Второй раз через 100ms на случай медленной загрузки картинок
+            setTimeout(() => { container.scrollTop = container.scrollHeight; }, 150);
+        });
+    }
     setTimeout(updateMessages, 1000);
 };
 
@@ -910,9 +926,8 @@ function sendMessage() {
                 <div class="message-bubble">
                     ${replyPreviewHtml}
                     <div class="message-content">
-                        ${hasFile ?
-                            '<div class="file-message sending"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">' + escapeHtml(fileInput.files[0].name) + '</div><div class="file-size">Отправка...</div></div></div>' :
-                            '<p style="white-space: pre-wrap; word-break: break-word; margin: 0;">' + escapeHtml(messageText) + '</p>'}
+                        ${hasFile ? '<div class="file-message sending"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">' + escapeHtml(fileInput.files[0].name) + '</div><div class="file-size">Отправка...</div></div></div>' : ''}
+                        ${messageText.trim() ? '<p style="white-space: pre-wrap; word-break: break-word; margin: ' + (hasFile ? '6px 0 0 0' : '0') + ';">' + escapeHtml(messageText) + '</p>' : ''}
                     </div>
                     <div class="message-meta">
                         <span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
@@ -946,15 +961,13 @@ function sendMessage() {
                 tempMessage.dataset.messageId = data.message_id;
                 tempMessage.classList.remove('sending');
 
-                // Обновляем контент если был файл/изображение (у текстовых уже всё правильно)
-                if (data.image_path) {
-                    const contentDiv = tempMessage.querySelector('.message-content');
-                    if (contentDiv) {
-                        contentDiv.innerHTML = `<img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
-                    }
-                } else if (data.file_path) {
-                    const contentDiv = tempMessage.querySelector('.message-content');
-                    if (contentDiv) {
+                // Обновляем контент: файл + текст могут быть одновременно
+                const contentDiv = tempMessage.querySelector('.message-content');
+                if (contentDiv) {
+                    let newContentHtml = '';
+                    if (data.image_path) {
+                        newContentHtml += `<img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
+                    } else if (data.file_path) {
                         const fileName = data.file_name || 'Файл';
                         const ext = fileName.split('.').pop().toLowerCase();
                         let fileIcon = '';
@@ -967,19 +980,31 @@ function sendMessage() {
                         } else {
                             fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-file"></use></svg>';
                         }
-                        contentDiv.innerHTML = `
-                            <div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')">
-                                <span class="file-icon">${fileIcon}</span>
-                                <div class="file-info">
-                                    <div class="file-name">${escapeHtml(fileName)}</div>
-                                    <div class="file-size">${data.file_size || '0 KB'}</div>
-                                </div>
-                                <span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span>
-                            </div>`;
+                        newContentHtml += `<div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')"><span class="file-icon">${fileIcon}</span><div class="file-info"><div class="file-name">${escapeHtml(fileName)}</div><div class="file-size">${data.file_size || '0 KB'}</div></div><span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span></div>`;
+                    }
+                    // Текст отображаем в любом случае если есть (даже если есть файл)
+                    if (data.content) {
+                        const escapedText = escapeHtml(data.content);
+                        const withBreaks = escapedText.replace(/\n/g, '<br>');
+                        newContentHtml += `<p style="white-space: pre-wrap; word-break: break-word; margin: ${(data.file_path || data.image_path) ? '6px 0 0 0' : '0'};">${withBreaks}</p>`;
+                    }
+                    // Если есть что обновить (файл или изображение пришли) — заменяем контент
+                    if (data.image_path || data.file_path) {
+                        contentDiv.innerHTML = newContentHtml;
+                    }
+
+                    // Если сервер вернул данные о ссылке — сразу добавляем превью
+                    if (data.link_url && !contentDiv.querySelector('.link-preview')) {
+                        injectLinkPreview(contentDiv, data);
                     }
                 }
 
-                // Заменяем спиннер на галочку — только статус, без перерисовки пузыря
+                // Если ссылки ещё нет в ответе — запускаем polling чтобы подхватить превью как только сервер его обработает
+                if (!data.link_url) {
+                    pollForLinkPreview(data.message_id, tempMessage);
+                }
+
+                // Заменяем спиннер на галочку
                 const readStatus = tempMessage.querySelector('.read-status');
                 if (readStatus) {
                     readStatus.title = 'Отправлено';
@@ -987,7 +1012,7 @@ function sendMessage() {
                     readStatus.classList.remove('spinning');
                 }
 
-                // Добавляем кнопки действий если их нет
+                // Добавляем кнопки действий (включая pin) если их нет
                 if (!tempMessage.querySelector('.message-actions')) {
                     const bubble = tempMessage.querySelector('.message-bubble');
                     if (bubble) {
@@ -998,6 +1023,9 @@ function sendMessage() {
                                 </button>
                                 <button class="message-action-btn" onclick="forwardMessage(${data.message_id})" title="Переслать">
                                     <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg>
+                                </button>
+                                <button class="message-action-btn" onclick="pinMessage(${data.message_id})" title="Закрепить" style="color:var(--accent);">
+                                    <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>
                                 </button>
                                 ${data.content ? `<button class="message-action-btn" onclick="editMessage(${data.message_id}, this)" title="Редактировать">
                                     <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>
@@ -1169,6 +1197,47 @@ function createRealMessage(data, messageText, file, cachedReplyData = null) {
     `;
 }
 
+// Вставка превью ссылки в элемент контента
+function injectLinkPreview(contentDiv, data) {
+    if (!data.link_url) return;
+    const linkHtml = `
+        <div class="link-preview" onclick="window.open('${escapeHtml(data.link_url)}', '_blank')">
+            ${data.link_image ? `<div class="link-preview-image"><img src="${escapeHtml(data.link_image)}" alt="" onerror="this.parentElement.style.display='none'"></div>` : ''}
+            <div class="link-preview-content">
+                ${data.link_title ? `<div class="link-preview-title">${escapeHtml(data.link_title)}</div>` : ''}
+                ${data.link_description ? `<div class="link-preview-description">${escapeHtml(data.link_description.substring(0, 200))}${data.link_description.length > 200 ? '...' : ''}</div>` : ''}
+                <div class="link-preview-url">${escapeHtml(data.link_url)}</div>
+            </div>
+        </div>`;
+    contentDiv.insertAdjacentHTML('beforeend', linkHtml);
+}
+
+// Polling для link preview: используем существующий эндпоинт get_messages
+// Запрашиваем сообщение начиная с messageId-1 чтобы получить его с обновлёнными данными о ссылке
+function pollForLinkPreview(messageId, messageEl, attempts) {
+    attempts = attempts || 0;
+    if (attempts >= 8) return; // ~16 секунд максимум
+    setTimeout(() => {
+        fetch(`/get_messages/{{ chat.id }}?last_id=${messageId - 1}`)
+            .then(r => r.json())
+            .then(messages => {
+                const msg = messages.find(m => m.id == messageId);
+                if (msg && msg.link_url) {
+                    const el = document.querySelector(`.message[data-message-id="${messageId}"]`) || messageEl;
+                    if (el) {
+                        const contentDiv = el.querySelector('.message-content');
+                        if (contentDiv && !contentDiv.querySelector('.link-preview')) {
+                            injectLinkPreview(contentDiv, msg);
+                        }
+                    }
+                } else {
+                    pollForLinkPreview(messageId, messageEl, attempts + 1);
+                }
+            })
+            .catch(() => {});
+    }, 2000);
+}
+
 // Восстановление при ошибке
 function restoreFailedMessage(tempMessageId, messageText, error) {
     const tempMessage = document.querySelector(`.message[data-message-id="${tempMessageId}"]`);
@@ -1326,6 +1395,16 @@ function pinMessage(messageId) {
             if (data.success) {
                 showNotification('Сообщение закреплено', 'success');
                 refreshPinnedBanner();
+                // Обновляем кнопку в DOM — заменяем «Закрепить» на «Открепить»
+                const msg = document.querySelector(`.message[data-message-id="${messageId}"]`);
+                if (msg) {
+                    const pinBtn = msg.querySelector(`button[onclick="pinMessage(${messageId})"]`);
+                    if (pinBtn) {
+                        pinBtn.title = 'Открепить';
+                        pinBtn.style.opacity = '0.6';
+                        pinBtn.setAttribute('onclick', `unpinMessage(${messageId})`);
+                    }
+                }
             } else { alert(data.error || 'Ошибка'); }
         });
 }
@@ -1334,7 +1413,20 @@ function unpinMessage(messageId) {
     fetch(`/unpin_message/${messageId}`, { method: 'POST' })
         .then(r => r.json())
         .then(data => {
-            if (data.success) { showNotification('Сообщение откреплено', 'info'); refreshPinnedBanner(); }
+            if (data.success) {
+                showNotification('Сообщение откреплено', 'info');
+                refreshPinnedBanner();
+                // Обновляем кнопку в DOM — заменяем «Открепить» на «Закрепить»
+                const msg = document.querySelector(`.message[data-message-id="${messageId}"]`);
+                if (msg) {
+                    const unpinBtn = msg.querySelector(`button[onclick="unpinMessage(${messageId})"]`);
+                    if (unpinBtn) {
+                        unpinBtn.title = 'Закрепить';
+                        unpinBtn.style.opacity = '1';
+                        unpinBtn.setAttribute('onclick', `pinMessage(${messageId})`);
+                    }
+                }
+            }
             else { alert(data.error || 'Ошибка'); }
         });
 }
@@ -1501,13 +1593,19 @@ function replyToMessage(messageId) {
     messageInput.focus();
     replyToId = messageId;
 
-    // ИСПРАВЛЕНИЕ: Сохраняем данные ответа из DOM
+    // Сохраняем данные ответа из DOM
     const messageElement = document.querySelector(`.message[data-message-id="${messageId}"]`);
     if (messageElement) {
-        const replySender = messageElement.querySelector('.reply-sender')?.textContent ||
-                           messageElement.querySelector('.chat-user-details h2')?.textContent ||
-                           messageElement.querySelector('.message-wrapper')?.querySelector('.message-avatar')?.alt ||
-                           'Пользователь';
+        // Для входящего сообщения — имя отправителя берём из alt аватара или заголовка чата
+        let replySender = 'Пользователь';
+        if (messageElement.classList.contains('sent')) {
+            replySender = '{{ current_user.username }}';
+        } else {
+            const avatarEl = messageElement.querySelector('.message-avatar');
+            if (avatarEl) {
+                replySender = document.querySelector('.chat-user-details h2')?.textContent?.trim() || 'Пользователь';
+            }
+        }
 
         const messageContent = messageElement.querySelector('.message-content');
         let replyContent = '';
