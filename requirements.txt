@@ -17,3 +17,5 @@ requests
 cryptography
 user-agents
 flask-compress
+flask-socketio
+simple-websocket

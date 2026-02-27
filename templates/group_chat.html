@@ -985,7 +985,7 @@
                 setTimeout(() => { container.scrollTop = container.scrollHeight; }, 150);
             });
         }
-        setTimeout(updateMessages, 1000);
+        initGroupWebSocket();
     };
 
     // Отслеживание прокрутки
@@ -1005,7 +1005,7 @@
         });
     }
 
-    // Обновление сообщений
+    // Fallback polling (используется только без WS)
     function updateMessages() {
         fetch(`/get_messages/${currentGroupId}?last_id=${lastMessageId}&is_group=true`)
             .then(response => response.json())
@@ -1027,15 +1027,123 @@
                         container.scrollTop = container.scrollHeight - scrollPosition;
                     }
                 }
-                setTimeout(updateMessages, 2000);
+                if (!window._wsGroupConnected) setTimeout(updateMessages, 3000);
             })
             .catch(error => {
                 console.error('Ошибка обновления:', error);
-                setTimeout(updateMessages, 5000);
+                if (!window._wsGroupConnected) setTimeout(updateMessages, 5000);
             });
     }
 
-    // Добавление сообщения в чат
+    // ====== WebSocket для группового чата ======
+    window._wsGroupConnected = false;
+    let _groupTypingTimers = {};
+
+    function initGroupWebSocket() {
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            reconnectionDelay: 1000,
+            reconnectionAttempts: 10,
+        });
+        window._groupSocket = socket;
+
+        socket.on('connect', () => {
+            window._wsGroupConnected = true;
+            socket.emit('join_group', { group_id: currentGroupId });
+            socket.emit('heartbeat');
+            console.log('[WS group] connected');
+        });
+
+        socket.on('disconnect', () => {
+            window._wsGroupConnected = false;
+            setTimeout(updateMessages, 2000);
+        });
+
+        socket.on('reconnect', () => {
+            window._wsGroupConnected = true;
+            socket.emit('join_group', { group_id: currentGroupId });
+        });
+
+        // Новое сообщение
+        socket.on('new_message', (message) => {
+            if (message.sender_id == {{ current_user.id }}) {
+                if (message.id > lastMessageId) lastMessageId = message.id;
+                return;
+            }
+            if (document.querySelector(`.message[data-message-id="${message.id}"]`)) return;
+            const msgContainer = document.getElementById('messagesContainer');
+            const wasAtBottom = msgContainer.scrollHeight - msgContainer.scrollTop <= msgContainer.clientHeight + 50;
+            addMessageToChat(message);
+            if (message.id > lastMessageId) lastMessageId = message.id;
+            if (!isScrolledUp || wasAtBottom) msgContainer.scrollTop = msgContainer.scrollHeight;
+        });
+
+        // Превью ссылки
+        socket.on('link_preview_ready', (data) => {
+            const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+            if (!el) return;
+            const contentDiv = el.querySelector('.message-content');
+            if (contentDiv && !contentDiv.querySelector('.link-preview') && data.link_url) {
+                if (typeof injectLinkPreview === 'function') injectLinkPreview(contentDiv, data);
+            }
+        });
+
+        // Сообщение удалено
+        socket.on('message_deleted', (data) => {
+            const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+            if (el) el.remove();
+        });
+
+        // Сообщение отредактировано
+        socket.on('message_edited', (data) => {
+            const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+            if (!el) return;
+            const p = el.querySelector('.message-content p');
+            if (p) p.textContent = data.content;
+            const meta = el.querySelector('.message-meta');
+            if (meta && !meta.querySelector('.edited-label')) {
+                const span = document.createElement('span');
+                span.className = 'edited-label';
+                span.textContent = 'отредактировано';
+                meta.insertBefore(span, meta.firstChild);
+            }
+        });
+
+        // Индикатор «печатает» в группе
+        socket.on('typing', (data) => {
+            if (data.user_id == {{ current_user.id }}) return;
+            const membersText = document.getElementById('groupMembersText');
+            if (!membersText) return;
+            if (!membersText.dataset.defaultText) {
+                membersText.dataset.defaultText = membersText.textContent;
+            }
+            membersText.innerHTML = `<em style="color:var(--accent);">${escapeHtml(data.username)} печатает...</em>`;
+            clearTimeout(_groupTypingTimers[data.user_id]);
+            _groupTypingTimers[data.user_id] = setTimeout(() => {
+                membersText.textContent = membersText.dataset.defaultText || '';
+            }, 3000);
+        });
+
+        // Heartbeat
+        setInterval(() => {
+            if (document.visibilityState === 'visible') socket.emit('heartbeat');
+        }, 20000);
+
+        // Typing
+        const msgInput = document.getElementById('messageInput');
+        let lastTypingSent = 0;
+        if (msgInput) {
+            msgInput.addEventListener('input', () => {
+                const now = Date.now();
+                if (now - lastTypingSent > 2000) {
+                    lastTypingSent = now;
+                    socket.emit('typing', { group_id: currentGroupId });
+                }
+            });
+        }
+    }
+
+
     function addMessageToChat(message) {
         if (document.querySelector(`.message[data-message-id="${message.id}"]`)) {
             return;
@@ -2345,7 +2453,7 @@
                     <svg width="16" height="16" viewBox="0 0 24 24" style="vertical-align: middle; margin-right: 4px;">
                         <use xlink:href="#icon-group"></use>
                     </svg>
-                    {{ group.members|length }} участников • {{ group.description[:50] }}{% if group.description|length > 50 %}...{% endif %}
+                    <span id="groupMembersText">{{ group.members|length }} участников • {{ group.description[:50] }}{% if group.description|length > 50 %}...{% endif %}</span>
                 </p>
             </div>
         </div>

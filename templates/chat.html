@@ -643,14 +643,12 @@ function escapeHtml(unsafe) {
 window.onload = function() {
     const container = document.getElementById('messagesContainer');
     if (container) {
-        // requestAnimationFrame гарантирует что DOM уже отрисован
         requestAnimationFrame(() => {
             container.scrollTop = container.scrollHeight;
-            // Второй раз через 100ms на случай медленной загрузки картинок
             setTimeout(() => { container.scrollTop = container.scrollHeight; }, 150);
         });
     }
-    setTimeout(updateMessages, 1000);
+    initWebSocket();
 };
 
 // Отслеживание прокрутки
@@ -669,7 +667,7 @@ if (container) {
     });
 }
 
-// Обновление сообщений
+// Обновление сообщений (fallback polling — используется только если WS недоступен)
 function updateMessages() {
     fetch(`/get_messages/{{ chat.id }}?last_id=${lastMessageId}`)
         .then(response => response.json())
@@ -689,15 +687,15 @@ function updateMessages() {
                     container.scrollTop = container.scrollHeight - scrollPosition;
                 }
             }
-            setTimeout(updateMessages, 2000);
+            if (!window._wsConnected) setTimeout(updateMessages, 3000);
         })
         .catch(error => {
             console.error('Ошибка обновления:', error);
-            setTimeout(updateMessages, 5000);
+            if (!window._wsConnected) setTimeout(updateMessages, 5000);
         });
 }
 
-// Добавление сообщения в чат (для polling обновлений)
+// Добавление сообщения в чат (для WebSocket обновлений)
 function addMessageToChat(message) {
     if (document.querySelector(`.message[data-message-id="${message.id}"]`)) {
         return;
@@ -1885,72 +1883,240 @@ document.querySelectorAll('.modal').forEach(modal => {
     });
 });
 
-// ============ HEARTBEAT (онлайн-статус) ============
+// ============ WebSocket ============
 const OTHER_USER_ID = {{ other_user.id }};
 const CHAT_ID = {{ chat.id }};
+window._wsConnected = false;
+let _typingTimer = null;
 
-function sendHeartbeat() {
-    if (document.visibilityState === 'visible') {
-        fetch('/api/heartbeat', { method: 'POST' }).catch(() => {});
-    }
-}
+function initWebSocket() {
+    // Подключаем Socket.IO клиент
+    const socket = io({
+        transports: ['websocket', 'polling'],
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 10,
+    });
+    window._socket = socket;
 
-// Отправляем heartbeat сразу и каждые 20 секунд пока вкладка открыта
-sendHeartbeat();
-setInterval(sendHeartbeat, 20000);
+    socket.on('connect', () => {
+        window._wsConnected = true;
+        // Входим в комнату чата
+        socket.emit('join_chat', { chat_id: CHAT_ID });
+        // Входим в личную комнату для статусов
+        socket.emit('heartbeat');
+        console.log('[WS] connected, chat room joined');
+    });
 
-// Если вкладка скрыта/показана — сразу обновляем
-document.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') {
-        sendHeartbeat();
-    }
-});
+    socket.on('disconnect', () => {
+        window._wsConnected = false;
+        console.log('[WS] disconnected — fallback to polling');
+        setTimeout(updateMessages, 2000); // fallback
+    });
 
-// Обновляем статус собеседника каждые 5 секунд
-function pollOtherUserStatus() {
-    fetch(`/api/user_status/${OTHER_USER_ID}?chat_id=${CHAT_ID}`)
-        .then(r => r.json())
-        .then(data => {
-            const dot = document.getElementById('userStatusDot');
-            const text = document.getElementById('userStatusText');
-            if (!dot || !text) return;
+    socket.on('reconnect', () => {
+        window._wsConnected = true;
+        socket.emit('join_chat', { chat_id: CHAT_ID });
+    });
 
-            if (data.is_typing) {
-                dot.className = 'status online';
-                text.innerHTML = '<span class="status online"></span> <em style="color:var(--accent);">печатает...</em>';
-            } else if (data.status === 'online') {
-                dot.className = 'status online';
-                text.innerHTML = '<span class="status online"></span> Онлайн';
-            } else {
-                dot.className = 'status offline';
-                const lastSeen = data.last_seen ? `Был(а) ${data.last_seen}` : 'давно';
-                text.innerHTML = `<span class="status offline"></span> ${lastSeen}`;
-            }
-        })
-        .catch(() => {});
-}
+    // Новое сообщение
+    socket.on('new_message', (message) => {
+        // Если это наше собственное сообщение — оно уже в DOM (optimistic UI)
+        if (message.sender_id == {{ current_user.id }}) {
+            // Обновляем lastMessageId
+            if (message.id > lastMessageId) lastMessageId = message.id;
+            return;
+        }
+        if (document.querySelector(`.message[data-message-id="${message.id}"]`)) return;
 
-setInterval(pollOtherUserStatus, 5000);
-
-// ============ TYPING INDICATOR ============
-let typingTimeout = null;
-let lastTypingSent = 0;
-
-const messageInputEl = document.getElementById('messageInput');
-if (messageInputEl) {
-    messageInputEl.addEventListener('input', () => {
-        const now = Date.now();
-        // Шлём не чаще раза в 2 секунды
-        if (now - lastTypingSent > 2000) {
-            lastTypingSent = now;
-            fetch('/api/typing', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ chat_id: CHAT_ID })
-            }).catch(() => {});
+        const msgContainer = document.getElementById('messagesContainer');
+        const wasAtBottom = msgContainer.scrollHeight - msgContainer.scrollTop <= msgContainer.clientHeight + 50;
+        addMessageToChat(message);
+        if (message.id > lastMessageId) lastMessageId = message.id;
+        if (!isScrolledUp || wasAtBottom) {
+            msgContainer.scrollTop = msgContainer.scrollHeight;
+        }
+        // Помечаем как прочитанное если чат открыт
+        if (document.visibilityState === 'visible') {
+            socket.emit('messages_read', { chat_id: CHAT_ID });
         }
     });
+
+    // Превью ссылки готово
+    socket.on('link_preview_ready', (data) => {
+        const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+        if (!el) return;
+        const contentDiv = el.querySelector('.message-content');
+        if (contentDiv && !contentDiv.querySelector('.link-preview') && data.link_url) {
+            injectLinkPreview(contentDiv, {
+                link_url: data.link_url,
+                link_title: data.link_title,
+                link_description: data.link_description,
+                link_image: data.link_image,
+            });
+        }
+    });
+
+    // Статус собеседника
+    socket.on('user_status', (data) => {
+        if (data.user_id != OTHER_USER_ID) return;
+        const dot = document.getElementById('userStatusDot');
+        const text = document.getElementById('userStatusText');
+        if (!dot || !text) return;
+        if (data.status === 'online') {
+            dot.className = 'status online';
+            text.innerHTML = '<span class="status online"></span> Онлайн';
+        } else {
+            dot.className = 'status offline';
+            const ls = data.last_seen ? `Был(а) ${data.last_seen}` : 'давно';
+            text.innerHTML = `<span class="status offline"></span> ${ls}`;
+        }
+    });
+
+    // Индикатор «печатает»
+    socket.on('typing', (data) => {
+        if (data.user_id == {{ current_user.id }}) return;
+        const dot = document.getElementById('userStatusDot');
+        const text = document.getElementById('userStatusText');
+        if (!dot || !text) return;
+        dot.className = 'status online';
+        text.innerHTML = '<span class="status online"></span> <em style="color:var(--accent);">печатает...</em>';
+        clearTimeout(_typingTimer);
+        _typingTimer = setTimeout(() => {
+            // Возвращаем статус
+            socket.emit('join_chat', { chat_id: CHAT_ID }); // просим обновить статус через heartbeat
+        }, 3000);
+    });
+
+    // Сообщение удалено другим участником
+    socket.on('message_deleted', (data) => {
+        const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+        if (el) el.remove();
+    });
+
+    // Сообщение отредактировано
+    socket.on('message_edited', (data) => {
+        const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
+        if (!el) return;
+        const p = el.querySelector('.message-content p');
+        if (p) p.textContent = data.content;
+        const meta = el.querySelector('.message-meta');
+        if (meta && !meta.querySelector('.edited-label')) {
+            const span = document.createElement('span');
+            span.className = 'edited-label';
+            span.textContent = 'отредактировано';
+            meta.insertBefore(span, meta.firstChild);
+        }
+    });
+
+    // Прочтено
+    socket.on('messages_read', (data) => {
+        if (data.chat_id != CHAT_ID) return;
+        document.querySelectorAll('.message.sent .read-status').forEach(el => {
+            el.title = 'Прочитано';
+            el.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-eye"></use></svg>`;
+        });
+    });
+
+    // Heartbeat каждые 20 сек
+    setInterval(() => {
+        if (document.visibilityState === 'visible') socket.emit('heartbeat');
+    }, 20000);
+
+    // При возврате на вкладку
+    document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') {
+            socket.emit('heartbeat');
+            socket.emit('messages_read', { chat_id: CHAT_ID });
+        }
+    });
+
+    // Typing через WebSocket
+    const messageInputEl = document.getElementById('messageInput');
+    let lastTypingSent = 0;
+    if (messageInputEl) {
+        messageInputEl.addEventListener('input', () => {
+            const now = Date.now();
+            if (now - lastTypingSent > 2000) {
+                lastTypingSent = now;
+                socket.emit('typing', { chat_id: CHAT_ID });
+            }
+        });
+    }
 }
+
+// Переопределяем sendMessage для использования WebSocket при текстовых сообщениях
+const _originalSendMessage = sendMessage;
+window.sendMessage = function() {
+    const input = document.getElementById('messageInput');
+    const fileInput = document.getElementById('fileInput');
+    const hasFile = fileInput && fileInput.files.length > 0;
+
+    // Если есть файл — используем HTTP (multipart)
+    if (hasFile || !window._wsConnected) {
+        _originalSendMessage();
+        return;
+    }
+
+    const content = (input.value || '').trim();
+    if (!content) return;
+    if (isSending) return;
+
+    // Отправляем через WebSocket
+    isSending = true;
+    const sendButton = document.querySelector('.send-btn');
+    if (sendButton) {
+        sendButton.disabled = true;
+        sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg>`;
+    }
+
+    input.value = '';
+
+    // Optimistic UI — добавляем сообщение сразу
+    const tempId = 'temp_' + Date.now();
+    const msgContainer = document.getElementById('messagesContainer');
+    let replyPreviewHtml = '';
+    if (replyToId && replyToData) {
+        let previewText = replyToData.content ? escapeHtml(replyToData.content.substring(0, 50)) : (replyToData.image_path ? '📷 Фото' : '📎 ' + escapeHtml(replyToData.file_name || 'Файл'));
+        replyPreviewHtml = `<div class="reply-preview"><div class="reply-sender">${escapeHtml(replyToData.sender_name||'')}</div><div class="reply-content">${previewText}</div></div>`;
+    }
+    const tempHtml = `<div class="message sent sending" data-message-id="${tempId}">
+        <div class="message-wrapper"><div class="message-bubble">
+            ${replyPreviewHtml}
+            <div class="message-content"><p style="white-space:pre-wrap;word-break:break-word;margin:0;">${escapeHtml(content)}</p></div>
+            <div class="message-meta">
+                <span>${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+                <span class="read-status"><svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg></span>
+            </div>
+        </div></div></div>`;
+    msgContainer.insertAdjacentHTML('beforeend', tempHtml);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+
+    // Отправляем событие на сервер
+    window._socket.emit('send_message', {
+        chat_id: CHAT_ID,
+        content: content,
+        reply_to_id: replyToId || null,
+    });
+
+    // Слушаем подтверждение (сервер вернёт сообщение через 'new_message' в комнату)
+    // Просто убираем спиннер через короткое время
+    setTimeout(() => {
+        const tempEl = document.querySelector(`.message[data-message-id="${tempId}"]`);
+        if (tempEl) {
+            tempEl.classList.remove('sending');
+            const rs = tempEl.querySelector('.read-status');
+            if (rs) rs.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`;
+        }
+    }, 500);
+
+    cancelReply();
+    isSending = false;
+    if (sendButton) {
+        sendButton.disabled = false;
+        sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024"><use xlink:href="#icon-send"></use></svg>`;
+    }
+    input.focus();
+};
 </script>
 
 <div class="chat-container">

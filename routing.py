@@ -1393,9 +1393,17 @@ def register_routes(app, db, login_manager):
         message = Message.query.get_or_404(message_id)
         if message.sender_id != current_user.id:
             return jsonify({'error': 'Нет прав для удаления этого сообщения'}), 403
+        chat_id = message.chat_id
+        group_id = message.group_id
         message.is_deleted = True
         message.content    = None
         db.session.commit()
+        # Уведомляем других участников через WebSocket
+        try:
+            from socketio_events import broadcast_message_deleted
+            broadcast_message_deleted(message_id, chat_id=chat_id, group_id=group_id)
+        except Exception:
+            pass
         return jsonify({'success': True})
 
     @app.route('/edit_message/<int:message_id>', methods=['POST'])
@@ -1407,9 +1415,17 @@ def register_routes(app, db, login_manager):
         new_content = request.form.get('content', '').strip()
         if not new_content:
             return jsonify({'error': 'Текст сообщения не может быть пустым'}), 400
+        chat_id = message.chat_id
+        group_id = message.group_id
         message.content   = new_content
         message.is_edited = True
         db.session.commit()
+        # Уведомляем через WebSocket
+        try:
+            from socketio_events import broadcast_message_edited
+            broadcast_message_edited(message_id, new_content, chat_id=chat_id, group_id=group_id)
+        except Exception:
+            pass
         return jsonify({'success': True, 'content': new_content})
 
     @app.route('/get_unread_counts')

@@ -50,6 +50,8 @@
         @keyframes slideUp{from{transform:translate(-50%,100%);opacity:0}to{transform:translate(-50%,0);opacity:1}}
         @media(max-width:768px){.context-menu{min-width:180px}.selection-toolbar{width:90%;justify-content:space-between}}
     </style>
+    <!-- Socket.IO клиент -->
+    <script src="{{ url_for('static', filename='js/socket.io.min.js') }}"></script>
     {% block extra_css %}{% endblock %}
 </head>
 <body>

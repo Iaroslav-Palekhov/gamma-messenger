@@ -1127,12 +1127,38 @@
         }, 3000);
     }
 
-    /* ===== АВТООБНОВЛЕНИЕ ЧАТОВ ===== */
+    /* ===== АВТООБНОВЛЕНИЕ ЧАТОВ через WebSocket ===== */
     let refreshInterval = null;
 
     function startAutoRefresh() {
-        if (refreshInterval) clearInterval(refreshInterval);
-        refreshInterval = setInterval(fetchChatsList, 1000);
+        // Подключаем WebSocket для обновления списка чатов
+        const socket = io({
+            transports: ['websocket', 'polling'],
+            reconnectionDelay: 1000,
+        });
+        window._chatsSocket = socket;
+
+        socket.on('connect', () => {
+            console.log('[WS chats] connected');
+            socket.emit('heartbeat');
+        });
+
+        // Новое сообщение в каком-то чате — обновляем список
+        socket.on('chat_updated', (data) => {
+            // Быстрое обновление — просто перезагружаем список
+            fetchChatsList();
+        });
+
+        // Fallback: если WS не работает — polling каждые 5 сек (было 1 сек)
+        socket.on('disconnect', () => {
+            if (!refreshInterval) refreshInterval = setInterval(fetchChatsList, 5000);
+        });
+        socket.on('reconnect', () => {
+            if (refreshInterval) { clearInterval(refreshInterval); refreshInterval = null; }
+        });
+
+        // Первоначальная загрузка
+        fetchChatsList();
     }
 
     function fetchChatsList() {

@@ -5,6 +5,7 @@ from models import db, User, UserSession
 from routing import register_routes
 from utils import create_upload_folders, create_default_avatars
 from security import init_security
+from socketio_events import socketio
 from datetime import datetime
 import os
 
@@ -13,6 +14,9 @@ login_manager = LoginManager()
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+
+    # Flask-SocketIO
+    socketio.init_app(app)
 
     # Сжатие ответов (gzip/brotli) — уменьшает трафик на 60-80%
     try:
@@ -106,4 +110,4 @@ def create_app():
 
 if __name__ == '__main__':
     app = create_app()
-    app.run(debug=True, host='0.0.0.0', port=2200)
+    socketio.run(app, debug=True, host='0.0.0.0', port=2200, allow_unsafe_werkzeug=True)
