@@ -106,12 +106,33 @@ def register_routes(app, db, login_manager):
             return redirect(url_for('chats'))
 
         if request.method == 'POST':
-            email    = request.form.get('email')
-            username = request.form.get('username')
-            password = request.form.get('password')
+            import re
+            email    = (request.form.get('email') or '').strip()[:254]
+            username = (request.form.get('username') or '').strip()[:32]
+            password = request.form.get('password') or ''
+            password2 = request.form.get('password2') or ''
 
             if not email or not password or not username:
                 return render_template('register.html', error='Заполните все поля')
+
+            # Username: 5-32, только буквы/цифры/_
+            if not re.match(r'^[a-zA-Z0-9_]{5,32}$', username):
+                return render_template('register.html', error='Имя пользователя: от 5 до 32 символов (буквы, цифры, _)')
+
+            # Email базовая проверка
+            if not re.match(r'^[^@\s]+@[^@\s]+\.[^@\s]+$', email):
+                return render_template('register.html', error='Введите корректный email')
+
+            # Пароль минимум 8 символов
+            if len(password) < 8:
+                return render_template('register.html', error='Пароль должен быть минимум 8 символов')
+
+            if len(password) > 128:
+                return render_template('register.html', error='Пароль слишком длинный (максимум 128 символов)')
+
+            # Подтверждение пароля (если поле передано)
+            if password2 and password != password2:
+                return render_template('register.html', error='Пароли не совпадают')
 
             if User.query.filter_by(email=email).first():
                 return render_template('register.html', error='Пользователь с такой почтой уже существует')
@@ -141,14 +162,42 @@ def register_routes(app, db, login_manager):
             return redirect(url_for('chats'))
 
         if request.method == 'POST':
-            username = request.form.get('username')
-            password = request.form.get('password')
+            username = (request.form.get('username') or '').strip()[:254]
+            password = request.form.get('password') or ''
+
+            # Базовые проверки входных данных
+            if not username or not password:
+                return render_template('login.html', error='Заполните все поля')
+
+            if len(password) > 128:
+                return render_template('login.html', error='Неверный email/username или пароль')
+
+            # Простая защита от брутфорса через сессию
+            fail_key = '_login_fails'
+            fail_time_key = '_login_fail_time'
+            import time as _time
+
+            fails = session.get(fail_key, 0)
+            fail_time = session.get(fail_time_key, 0)
+
+            # Сброс счётчика если прошло больше 15 минут
+            if _time.time() - fail_time > 900:
+                fails = 0
+
+            if fails >= 10:
+                remaining = int(900 - (_time.time() - fail_time))
+                mins = remaining // 60
+                return render_template('login.html', error=f'Слишком много попыток. Подождите {mins} мин.')
 
             user = User.query.filter(
                 (User.email == username) | (User.username == username)
             ).first()
 
             if user and check_password_hash(user.password, password):
+                # Сброс счётчика при успехе
+                session.pop(fail_key, None)
+                session.pop(fail_time_key, None)
+
                 login_user(user)
                 user.status    = 'online'
                 user.last_seen = datetime.utcnow()
@@ -160,6 +209,8 @@ def register_routes(app, db, login_manager):
 
                 return redirect(url_for('chats'))
             else:
+                session[fail_key] = fails + 1
+                session[fail_time_key] = _time.time()
                 return render_template('login.html', error='Неверный email/username или пароль')
 
         return render_template('login.html')
