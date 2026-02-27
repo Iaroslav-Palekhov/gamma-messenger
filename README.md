@@ -6,7 +6,7 @@
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.9+-yellow.svg)
 ![SQLite](https://img.shields.io/badge/SQLite-3-lightblue.svg)
-![License](https://img.shields.io/badge/license-MIT-red.svg)
+![License](https://img.shields.io/badge/license-GPL-3.0-red.svg)
 ![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
 **Современный мессенджер с групповыми чатами, файлообменником и real-time обновлениями**
@@ -426,7 +426,7 @@ git push origin feature/your-feature-name
 
 ## Лицензия
 
-Распространяется под лицензией **GNU 3**. Подробнее см. файл [LICENSE](LICENSE).
+Распространяется под лицензией **GPL-3**. Подробнее см. файл [LICENSE](LICENSE).
 
 ---
 
