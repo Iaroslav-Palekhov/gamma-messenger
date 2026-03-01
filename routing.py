@@ -147,6 +147,7 @@ def register_routes(app, db, login_manager):
             db.session.commit()
 
             login_user(user)
+            session.permanent = True
 
             tok = secrets.token_hex(32)
             session['session_token'] = tok
@@ -199,6 +200,7 @@ def register_routes(app, db, login_manager):
                 session.pop(fail_time_key, None)
 
                 login_user(user)
+                session.permanent = True
                 user.status    = 'online'
                 user.last_seen = datetime.utcnow()
                 db.session.commit()
