@@ -499,6 +499,9 @@ def register_routes(app, db, login_manager):
             avatar   = request.files.get('avatar')
 
             if username:
+                username = username.strip()
+                if len(username) < 5:
+                    return jsonify({'error': 'Имя пользователя должно содержать минимум 5 символов'}), 400
                 existing_user = User.query.filter_by(username=username).first()
                 if existing_user and existing_user.id != current_user.id:
                     return jsonify({'error': 'Имя пользователя уже занято'}), 400
@@ -1099,6 +1102,20 @@ def register_routes(app, db, login_manager):
                     daemon=True
                 )
                 t.start()
+
+        # Эмитим WS-событие new_message чтобы получатель увидел файл/изображение мгновенно
+        if file and file.filename:
+            try:
+                from socketio_events import socketio as _sio, _serialize_message, _emit_chat_update, _emit_group_update
+                payload = _serialize_message(message, current_user.id, app)
+                if message.chat_id:
+                    _sio.emit('new_message', payload, to=f'chat_{message.chat_id}')
+                    _emit_chat_update(message.chat_id, message, message.receiver_id)
+                elif message.group_id:
+                    _sio.emit('new_message', payload, to=f'group_{message.group_id}')
+                    _emit_group_update(message.group_id, message)
+            except Exception:
+                pass  # Не блокируем ответ если WS недоступен
 
         return jsonify({
             'success': True,

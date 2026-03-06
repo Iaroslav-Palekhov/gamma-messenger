@@ -4,8 +4,8 @@
 
 {% block content %}
 <div class="app-container">
-    <div class="sidebar" style="width: 100%; max-width: 600px; margin: 0 auto; border-right: none;">
-        <div class="header">
+    <div class="sidebar" style="width: 100%; max-width: 600px; margin: 0 auto; border-right: none; overflow-y: auto;">
+        <div class="header" style="position: sticky; top: 0; z-index: 10; background: var(--bg-secondary);">
             <div class="user-info">
                 <a href="{{ url_for('group_chat', group_id=group.id) }}" class="btn-icon" style="background: var(--bg-tertiary); margin-right: 10px;">
                     <svg width="24" height="24" viewBox="0 0 1024 1024">

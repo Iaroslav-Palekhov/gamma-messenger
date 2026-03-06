@@ -626,6 +626,19 @@ let sendingMessageId = null;
 let replyToId = null;
 let replyToData = null; // Храним данные ответа (sender_name, content, etc.)
 
+// Нормализация путей к файлам/изображениям из WebSocket (сервер может отдавать разные форматы)
+function resolveFileUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http') || path.startsWith('/static/') || path.startsWith('/download')) return path;
+    if (path.startsWith('uploads/')) return '/static/' + path;
+    return '/static/uploads/' + path;
+}
+function resolveDownloadUrl(path) {
+    if (!path) return '';
+    if (path.startsWith('http') || path.startsWith('/download') || path.startsWith('/static/')) return path;
+    return '/download_file/' + path;
+}
+
 // Функция экранирования HTML
 function escapeHtml(unsafe) {
     if (!unsafe) return '';
@@ -747,12 +760,14 @@ function addMessageToChat(message) {
     // HTML для контента сообщения
     let contentHtml = '';
     if (message.image_path) {
-        contentHtml = `<img src="${message.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
+        const imgUrl = resolveFileUrl(message.image_path);
+        contentHtml = `<img src="${imgUrl}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
     }
     else if (message.file_path) {
         let fileIcon = '';
         const fileName = message.file_name || 'Файл';
         const ext = fileName.split('.').pop().toLowerCase();
+        const fileUrl = resolveDownloadUrl(message.file_path);
 
         if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) {
             fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-image"></use></svg>';
@@ -765,7 +780,7 @@ function addMessageToChat(message) {
         }
 
         contentHtml = `
-            <div class="file-message" onclick="downloadFile('${message.file_path}', '${escapeHtml(fileName)}')">
+            <div class="file-message" onclick="downloadFile('${fileUrl}', '${escapeHtml(fileName)}')">
                 <span class="file-icon">${fileIcon}</span>
                 <div class="file-info">
                     <div class="file-name">${escapeHtml(fileName)}</div>
@@ -863,203 +878,125 @@ function addMessageToChat(message) {
 
 // Отправка сообщения
 function sendMessage() {
-    const form = document.getElementById('messageForm');
-    const formData = new FormData(form);
     const input = document.getElementById('messageInput');
     const fileInput = document.getElementById('fileInput');
     const sendButton = document.querySelector('.send-btn');
+    const hasFile = fileInput && fileInput.files.length > 0;
+    const msgText = (input.value || '').trim();
 
-    if (!input.value.trim() && fileInput.files.length === 0) {
-        return;
-    }
+    if (!msgText && !hasFile) return;
+    if (isSending) { showNotification('Сообщение уже отправляется...', 'info'); return; }
 
-    if (isSending) {
-        showNotification('Сообщение уже отправляется...', 'info');
-        return;
-    }
-
-    // Добавляем reply_to_id в formData
-    if (replyToId) {
-        formData.append('reply_to_id', replyToId);
-    }
-
-    const messageText = input.value;
-    const hasFile = fileInput.files.length > 0;
-
-    isSending = true;
-    sendButton.disabled = true;
-    sendButton.innerHTML = `
-        <svg width="24" height="24" viewBox="0 0 1024 1024" class="spinning">
-            <use xlink:href="#icon-loading"></use>
-        </svg>
-    `;
-
-    input.value = '';
-
-    const tempMessageId = 'temp_' + Date.now();
-
-    // ИСПРАВЛЕНИЕ: Используем сохранённые данные ответа (replyToData)
-    let replyPreviewHtml = '';
-    if (replyToId && replyToData) {
-        let previewText = '';
-        if (replyToData.content) {
-            previewText = escapeHtml(replyToData.content.substring(0, 50) + (replyToData.content.length > 50 ? '...' : ''));
-        } else if (replyToData.image_path) {
-            previewText = '📷 Фото';
-        } else if (replyToData.file_path) {
-            previewText = '📎 ' + escapeHtml(replyToData.file_name || 'Файл');
+    // Файлы — HTTP (multipart, WS не поддерживает бинарные данные)
+    if (hasFile) {
+        const form = document.getElementById('messageForm');
+        const formData = new FormData(form);
+        if (replyToId) formData.append('reply_to_id', replyToId);
+        const fileText = input.value;
+        isSending = true;
+        sendButton.disabled = true;
+        sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg>`;
+        input.value = '';
+        const tempId = 'temp_' + Date.now();
+        let rpHtml = '';
+        if (replyToId && replyToData) {
+            let pt = replyToData.content ? escapeHtml(replyToData.content.substring(0,50)) : (replyToData.image_path ? '📷 Фото' : '📎 ' + escapeHtml(replyToData.file_name||'Файл'));
+            rpHtml = `<div class="reply-preview"><div class="reply-sender">${escapeHtml(replyToData.sender_name||'Пользователь')}</div><div class="reply-content">${pt}</div></div>`;
         }
-
-        replyPreviewHtml = `
-            <div class="reply-preview">
-                <div class="reply-sender">${escapeHtml(replyToData.sender_name || 'Пользователь')}</div>
-                <div class="reply-content">${previewText}</div>
-            </div>
-        `;
-    }
-
-    const tempMessageHtml = `
-        <div class="message sent sending" data-message-id="${tempMessageId}">
-            <div class="message-wrapper">
-                <div class="message-bubble">
-                    ${replyPreviewHtml}
+        const msgContainer = document.getElementById('messagesContainer');
+        msgContainer.insertAdjacentHTML('beforeend', `
+            <div class="message sent sending" data-message-id="${tempId}">
+                <div class="message-wrapper"><div class="message-bubble">
+                    ${rpHtml}
                     <div class="message-content">
-                        ${hasFile ? '<div class="file-message sending"><span class="file-icon">📁</span><div class="file-info"><div class="file-name">' + escapeHtml(fileInput.files[0].name) + '</div><div class="file-size">Отправка...</div></div></div>' : ''}
-                        ${messageText.trim() ? '<p style="white-space: pre-wrap; word-break: break-word; margin: ' + (hasFile ? '6px 0 0 0' : '0') + ';">' + escapeHtml(messageText) + '</p>' : ''}
+                        ${(()=>{const _f=fileInput.files[0];const _ext=_f.name.split('.').pop().toLowerCase();const _isImg=['jpg','jpeg','png','gif','webp','bmp'].includes(_ext);const _ico=getFileIcon(_ext);if(_isImg){const _url=URL.createObjectURL(_f);return `<div class="file-message sending"><span class="file-icon"><img src="${_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;"></span><div class="file-info"><div class="file-name">${escapeHtml(_f.name)}</div><div class="file-size">Отправка...</div></div></div>`;}return `<div class="file-message sending"><span class="file-icon"><svg width="32" height="32" viewBox="0 0 24 24"><use xlink:href="${_ico}"></use></svg></span><div class="file-info"><div class="file-name">${escapeHtml(_f.name)}</div><div class="file-size">Отправка...</div></div></div>`;})()}
+                        ${fileText.trim() ? `<p style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0 0;">${escapeHtml(fileText)}</p>` : ''}
                     </div>
                     <div class="message-meta">
-                        <span>${new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
-                        <span class="read-status">
-                            <svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning">
-                                <use xlink:href="#icon-loading"></use>
-                            </svg>
-                        </span>
+                        <span>${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+                        <span class="read-status"><svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg></span>
                     </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    const container = document.getElementById('messagesContainer');
-    container.insertAdjacentHTML('beforeend', tempMessageHtml);
-    sendingMessageId = tempMessageId;
-    container.scrollTop = container.scrollHeight;
-
-    fetch('/send_message', {
-        method: 'POST',
-        body: formData
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Обновляем временное сообщение на месте — без удаления и вставки
-            const tempMessage = document.querySelector(`.message[data-message-id="${tempMessageId}"]`);
-            if (tempMessage) {
-                // Апгрейдим ID и убираем класс "sending"
-                tempMessage.dataset.messageId = data.message_id;
-                tempMessage.classList.remove('sending');
-
-                // Обновляем контент: файл + текст могут быть одновременно
-                const contentDiv = tempMessage.querySelector('.message-content');
-                if (contentDiv) {
-                    let newContentHtml = '';
-                    if (data.image_path) {
-                        newContentHtml += `<img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">`;
-                    } else if (data.file_path) {
-                        const fileName = data.file_name || 'Файл';
-                        const ext = fileName.split('.').pop().toLowerCase();
-                        let fileIcon = '';
-                        if (['jpg','jpeg','png','gif','bmp','webp'].includes(ext)) {
-                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-image"></use></svg>';
-                        } else if (ext === 'pdf') {
-                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-pdf"></use></svg>';
-                        } else if (['zip','rar','7z'].includes(ext)) {
-                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-zip"></use></svg>';
-                        } else {
-                            fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-file"></use></svg>';
+                </div></div>
+            </div>`);
+        sendingMessageId = tempId;
+        msgContainer.scrollTop = msgContainer.scrollHeight;
+        fetch('/send_message', { method: 'POST', body: formData })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    const t = document.querySelector(`.message[data-message-id="${tempId}"]`);
+                    if (t) {
+                        t.dataset.messageId = data.message_id;
+                        t.classList.remove('sending');
+                        const cd = t.querySelector('.message-content');
+                        if (cd) {
+                            let h = '';
+                            if (data.image_path) h += `<img src="${resolveFileUrl(data.image_path)}" class="message-image" onclick="openImageModal(this.src)">`;
+                            else if (data.file_path) {
+                                const fn = data.file_name||'Файл', ext = fn.split('.').pop().toLowerCase();
+                                const ico = ['jpg','jpeg','png','gif','webp'].includes(ext)?'#icon-image':ext==='pdf'?'#icon-pdf':['zip','rar','7z'].includes(ext)?'#icon-zip':'#icon-file';
+                                h += `<div class="file-message" onclick="downloadFile('${resolveDownloadUrl(data.file_path)}','${escapeHtml(fn)}')"><span class="file-icon"><svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="${ico}"></use></svg></span><div class="file-info"><div class="file-name">${escapeHtml(fn)}</div><div class="file-size">${data.file_size||'0 KB'}</div></div><span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span></div>`;
+                            }
+                            if (data.content) h += `<p style="white-space:pre-wrap;word-break:break-word;margin:${(data.file_path||data.image_path)?'6px 0 0 0':'0'};">${escapeHtml(data.content).replace(/\n/g,'<br>')}</p>`;
+                            if (data.image_path||data.file_path) cd.innerHTML = h;
+                            if (data.link_url && !cd.querySelector('.link-preview')) injectLinkPreview(cd, data);
                         }
-                        newContentHtml += `<div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')"><span class="file-icon">${fileIcon}</span><div class="file-info"><div class="file-name">${escapeHtml(fileName)}</div><div class="file-size">${data.file_size || '0 KB'}</div></div><span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span></div>`;
-                    }
-                    // Текст отображаем в любом случае если есть (даже если есть файл)
-                    if (data.content) {
-                        const escapedText = escapeHtml(data.content);
-                        const withBreaks = escapedText.replace(/\n/g, '<br>');
-                        newContentHtml += `<p style="white-space: pre-wrap; word-break: break-word; margin: ${(data.file_path || data.image_path) ? '6px 0 0 0' : '0'};">${withBreaks}</p>`;
-                    }
-                    // Если есть что обновить (файл или изображение пришли) — заменяем контент
-                    if (data.image_path || data.file_path) {
-                        contentDiv.innerHTML = newContentHtml;
-                    }
-
-                    // Если сервер вернул данные о ссылке — сразу добавляем превью
-                    if (data.link_url && !contentDiv.querySelector('.link-preview')) {
-                        injectLinkPreview(contentDiv, data);
-                    }
-                }
-
-                // Если ссылки ещё нет в ответе — запускаем polling чтобы подхватить превью как только сервер его обработает
-                if (!data.link_url) {
-                    pollForLinkPreview(data.message_id, tempMessage);
-                }
-
-                // Заменяем спиннер на галочку
-                const readStatus = tempMessage.querySelector('.read-status');
-                if (readStatus) {
-                    readStatus.title = 'Отправлено';
-                    readStatus.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`;
-                    readStatus.classList.remove('spinning');
-                }
-
-                // Добавляем кнопки действий (включая pin) если их нет
-                if (!tempMessage.querySelector('.message-actions')) {
-                    const bubble = tempMessage.querySelector('.message-bubble');
-                    if (bubble) {
-                        bubble.insertAdjacentHTML('beforeend', `
-                            <div class="message-actions">
-                                <button class="message-action-btn" onclick="replyToMessage(${data.message_id})" title="Ответить">
-                                    <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-back"></use></svg>
-                                </button>
-                                <button class="message-action-btn" onclick="forwardMessage(${data.message_id})" title="Переслать">
-                                    <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg>
-                                </button>
-                                <button class="message-action-btn" onclick="pinMessage(${data.message_id})" title="Закрепить" style="color:var(--accent);">
-                                    <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>
-                                </button>
-                                ${data.content ? `<button class="message-action-btn" onclick="editMessage(${data.message_id}, this)" title="Редактировать">
-                                    <svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>
-                                </button>` : ''}
-                                <button class="message-action-btn" onclick="deleteMessage(${data.message_id})" title="Удалить" style="color:var(--danger);">
-                                    <svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg>
-                                </button>
+                        if (!data.link_url) pollForLinkPreview(data.message_id, t);
+                        const rs = t.querySelector('.read-status');
+                        if (rs) { rs.title='Отправлено'; rs.innerHTML=`<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`; rs.classList.remove('spinning'); }
+                        if (!t.querySelector('.message-actions')) {
+                            const bubble = t.querySelector('.message-bubble');
+                            if (bubble) bubble.insertAdjacentHTML('beforeend', `<div class="message-actions">
+                                <button class="message-action-btn" onclick="replyToMessage(${data.message_id})" title="Ответить"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-back"></use></svg></button>
+                                <button class="message-action-btn" onclick="forwardMessage(${data.message_id})" title="Переслать"><svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg></button>
+                                <button class="message-action-btn" onclick="pinMessage(${data.message_id})" title="Закрепить" style="color:var(--accent);"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></button>
+                                ${data.content ? `<button class="message-action-btn" onclick="editMessage(${data.message_id},this)" title="Редактировать"><svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg></button>` : ''}
+                                <button class="message-action-btn" onclick="deleteMessage(${data.message_id})" title="Удалить" style="color:var(--danger);"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg></button>
                             </div>`);
+                        }
+                        if (data.message_id > lastMessageId) lastMessageId = data.message_id;
                     }
-                }
-            }
+                    clearFile(); cancelReply(); input.focus();
+                } else { restoreFailedMessage(tempId, fileText, data.error||'Ошибка отправки'); }
+            })
+            .catch(e => { console.error(e); restoreFailedMessage(tempId, fileText, 'Ошибка соединения'); })
+            .finally(() => { isSending=false; sendButton.disabled=false; sendButton.innerHTML=`<svg width="24" height="24" viewBox="0 0 1024 1024"><use xlink:href="#icon-send"></use></svg>`; });
+        cancelReply();
+        return;
+    }
 
-            clearFile();
-            cancelReply();
-            input.focus();
+    // Текст — только WebSocket
+    isSending = true;
+    sendButton.disabled = true;
+    sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg>`;
+    input.value = '';
 
-            if (data.message_id && data.message_id > lastMessageId) {
-                lastMessageId = data.message_id;
-            }
-        } else {
-            restoreFailedMessage(tempMessageId, messageText, data.error || 'Ошибка отправки');
-        }
-    })
-    .catch(error => {
-        console.error('Ошибка отправки:', error);
-        restoreFailedMessage(tempMessageId, messageText, 'Ошибка соединения');
-    })
-    .finally(() => {
-        isSending = false;
-        sendButton.disabled = false;
-        sendButton.innerHTML = `
-            <svg width="24" height="24" viewBox="0 0 1024 1024">
-                <use xlink:href="#icon-send"></use>
-            </svg>
-        `;
-    });
+    const tempId = 'temp_' + Date.now();
+    const msgContainer = document.getElementById('messagesContainer');
+    let rpHtml = '';
+    if (replyToId && replyToData) {
+        let pt = replyToData.content ? escapeHtml(replyToData.content.substring(0,50)) : (replyToData.image_path ? '📷 Фото' : '📎 ' + escapeHtml(replyToData.file_name||'Файл'));
+        rpHtml = `<div class="reply-preview"><div class="reply-sender">${escapeHtml(replyToData.sender_name||'')}</div><div class="reply-content">${pt}</div></div>`;
+    }
+    msgContainer.insertAdjacentHTML('beforeend', `<div class="message sent sending" data-message-id="${tempId}">
+        <div class="message-wrapper"><div class="message-bubble">
+            ${rpHtml}
+            <div class="message-content"><p style="white-space:pre-wrap;word-break:break-word;margin:0;">${escapeHtml(msgText)}</p></div>
+            <div class="message-meta">
+                <span>${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
+                <span class="read-status"><svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg></span>
+            </div>
+        </div></div></div>`);
+    msgContainer.scrollTop = msgContainer.scrollHeight;
+    sendingMessageId = tempId;
+
+    window._socket.emit('send_message', { chat_id: CHAT_ID, content: msgText, reply_to_id: replyToId || null });
+
+    cancelReply();
+    isSending = false;
+    sendButton.disabled = false;
+    sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024"><use xlink:href="#icon-send"></use></svg>`;
+    input.focus();
 }
 
 // Создание реального сообщения
@@ -1069,13 +1006,14 @@ function createRealMessage(data, messageText, file, cachedReplyData = null) {
 
     if (data.image_path) {
         contentHtml = `
-            <img src="${data.image_path}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">
+            <img src="${resolveFileUrl(data.image_path)}" alt="Изображение" class="message-image" onclick="openImageModal(this.src)">
         `;
     }
     else if (data.file_path) {
         let fileIcon = '';
         const fileName = data.file_name || (file ? file.name : 'Файл');
         const ext = fileName.split('.').pop().toLowerCase();
+        const fileUrl = resolveDownloadUrl(data.file_path);
 
         if (['jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp'].includes(ext)) {
             fileIcon = '<svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="#icon-image"></use></svg>';
@@ -1088,7 +1026,7 @@ function createRealMessage(data, messageText, file, cachedReplyData = null) {
         }
 
         contentHtml = `
-            <div class="file-message" onclick="downloadFile('${data.file_path}', '${escapeHtml(fileName)}')">
+            <div class="file-message" onclick="downloadFile('${fileUrl}', '${escapeHtml(fileName)}')">
                 <span class="file-icon">${fileIcon}</span>
                 <div class="file-info">
                     <div class="file-name">${escapeHtml(fileName)}</div>
@@ -1355,18 +1293,48 @@ function retrySendMessage(button) {
 }
 
 // Обработка выбора файла
+function getFileIcon(ext) {
+    if (['jpg','jpeg','png','gif','webp','bmp','svg'].includes(ext)) return '#icon-image';
+    if (ext === 'pdf') return '#icon-pdf';
+    if (['zip','rar','7z','tar','gz'].includes(ext)) return '#icon-zip';
+    return '#icon-file';
+}
+function formatFileSize(bytes) {
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
 function handleFileSelect() {
     const fileInput = document.getElementById('fileInput');
     const filePreview = document.getElementById('filePreview');
-    const fileName = document.getElementById('fileName');
-    const fileSize = document.getElementById('fileSize');
-
-    if (fileInput.files.length > 0) {
-        const file = fileInput.files[0];
-        fileName.textContent = escapeHtml(file.name);
-        fileSize.textContent = `${(file.size / 1024).toFixed(1)} KB`;
-        filePreview.style.display = 'flex';
+    if (!fileInput.files.length) return;
+    const file = fileInput.files[0];
+    const ext = file.name.split('.').pop().toLowerCase();
+    const isImage = ['jpg','jpeg','png','gif','webp','bmp'].includes(ext);
+    const iconId = getFileIcon(ext);
+    const previewInfo = filePreview.querySelector('.file-preview-info');
+    if (isImage) {
+        const reader = new FileReader();
+        reader.onload = e => {
+            previewInfo.innerHTML = `
+                <img src="${e.target.result}" style="width:52px;height:52px;object-fit:cover;border-radius:8px;flex-shrink:0;">
+                <div>
+                    <div id="fileName" style="font-weight:600;font-size:14px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(file.name)}</div>
+                    <div id="fileSize" class="file-size">${formatFileSize(file.size)}</div>
+                </div>`;
+        };
+        reader.readAsDataURL(file);
+    } else {
+        previewInfo.innerHTML = `
+            <span class="file-icon" style="width:44px;height:44px;background:var(--bg-hover);border-radius:10px;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg width="26" height="26" viewBox="0 0 24 24"><use xlink:href="${iconId}"></use></svg>
+            </span>
+            <div>
+                <div id="fileName" style="font-weight:600;font-size:14px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(file.name)}</div>
+                <div id="fileSize" class="file-size">${formatFileSize(file.size)}</div>
+            </div>`;
     }
+    filePreview.style.display = 'flex';
 }
 
 // Очистка файла
@@ -1920,24 +1888,58 @@ function initWebSocket() {
 
     // Новое сообщение
     socket.on('new_message', (message) => {
-        // Если это наше собственное сообщение — оно уже в DOM (optimistic UI)
+        if (message.id > lastMessageId) lastMessageId = message.id;
+
+        // Если это наше собственное сообщение — обновляем temp элемент
         if (message.sender_id == {{ current_user.id }}) {
-            // Обновляем lastMessageId
-            if (message.id > lastMessageId) lastMessageId = message.id;
+            const tempEl = sendingMessageId
+                ? document.querySelector(`.message[data-message-id="${sendingMessageId}"]`)
+                : document.querySelector('.message[data-message-id^="temp_"]');
+            if (tempEl) {
+                tempEl.dataset.messageId = message.id;
+                tempEl.classList.remove('sending');
+                sendingMessageId = null;
+                // Убираем спиннер
+                const rs = tempEl.querySelector('.read-status');
+                if (rs) { rs.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`; rs.classList.remove('spinning'); }
+                // Добавляем кнопки действий если их нет
+                if (!tempEl.querySelector('.message-actions')) {
+                    const bubble = tempEl.querySelector('.message-bubble');
+                    if (bubble) bubble.insertAdjacentHTML('beforeend', `
+                        <div class="message-actions">
+                            <button class="message-action-btn" onclick="replyToMessage(${message.id})" title="Ответить"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-back"></use></svg></button>
+                            <button class="message-action-btn" onclick="forwardMessage(${message.id})" title="Переслать"><svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-group"></use></svg></button>
+                            <button class="message-action-btn" onclick="pinMessage(${message.id})" title="Закрепить" style="color:var(--accent);"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></button>
+                            ${message.content ? `<button class="message-action-btn" onclick="editMessage(${message.id}, this)" title="Редактировать"><svg width="20" height="20" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg></button>` : ''}
+                            <button class="message-action-btn" onclick="deleteMessage(${message.id})" title="Удалить" style="color:var(--danger);"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-delete"></use></svg></button>
+                        </div>`);
+                }
+                // Превью ссылки
+                if (message.link_url) {
+                    const cd = tempEl.querySelector('.message-content');
+                    if (cd && !cd.querySelector('.link-preview')) injectLinkPreview(cd, message);
+                } else if (message.content) {
+                    pollForLinkPreview(message.id, tempEl);
+                }
+            }
             return;
         }
+
         if (document.querySelector(`.message[data-message-id="${message.id}"]`)) return;
 
         const msgContainer = document.getElementById('messagesContainer');
         const wasAtBottom = msgContainer.scrollHeight - msgContainer.scrollTop <= msgContainer.clientHeight + 50;
         addMessageToChat(message);
-        if (message.id > lastMessageId) lastMessageId = message.id;
         if (!isScrolledUp || wasAtBottom) {
             msgContainer.scrollTop = msgContainer.scrollHeight;
         }
-        // Помечаем как прочитанное если чат открыт
         if (document.visibilityState === 'visible') {
             socket.emit('messages_read', { chat_id: CHAT_ID });
+        }
+        // Polling для превью ссылки у входящих сообщений
+        if (message.content && !message.link_url) {
+            const msgEl = document.querySelector(`.message[data-message-id="${message.id}"]`);
+            if (msgEl) pollForLinkPreview(message.id, msgEl);
         }
     });
 
@@ -2044,79 +2046,7 @@ function initWebSocket() {
     }
 }
 
-// Переопределяем sendMessage для использования WebSocket при текстовых сообщениях
-const _originalSendMessage = sendMessage;
-window.sendMessage = function() {
-    const input = document.getElementById('messageInput');
-    const fileInput = document.getElementById('fileInput');
-    const hasFile = fileInput && fileInput.files.length > 0;
 
-    // Если есть файл — используем HTTP (multipart)
-    if (hasFile || !window._wsConnected) {
-        _originalSendMessage();
-        return;
-    }
-
-    const content = (input.value || '').trim();
-    if (!content) return;
-    if (isSending) return;
-
-    // Отправляем через WebSocket
-    isSending = true;
-    const sendButton = document.querySelector('.send-btn');
-    if (sendButton) {
-        sendButton.disabled = true;
-        sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg>`;
-    }
-
-    input.value = '';
-
-    // Optimistic UI — добавляем сообщение сразу
-    const tempId = 'temp_' + Date.now();
-    const msgContainer = document.getElementById('messagesContainer');
-    let replyPreviewHtml = '';
-    if (replyToId && replyToData) {
-        let previewText = replyToData.content ? escapeHtml(replyToData.content.substring(0, 50)) : (replyToData.image_path ? '📷 Фото' : '📎 ' + escapeHtml(replyToData.file_name || 'Файл'));
-        replyPreviewHtml = `<div class="reply-preview"><div class="reply-sender">${escapeHtml(replyToData.sender_name||'')}</div><div class="reply-content">${previewText}</div></div>`;
-    }
-    const tempHtml = `<div class="message sent sending" data-message-id="${tempId}">
-        <div class="message-wrapper"><div class="message-bubble">
-            ${replyPreviewHtml}
-            <div class="message-content"><p style="white-space:pre-wrap;word-break:break-word;margin:0;">${escapeHtml(content)}</p></div>
-            <div class="message-meta">
-                <span>${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</span>
-                <span class="read-status"><svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning"><use xlink:href="#icon-loading"></use></svg></span>
-            </div>
-        </div></div></div>`;
-    msgContainer.insertAdjacentHTML('beforeend', tempHtml);
-    msgContainer.scrollTop = msgContainer.scrollHeight;
-
-    // Отправляем событие на сервер
-    window._socket.emit('send_message', {
-        chat_id: CHAT_ID,
-        content: content,
-        reply_to_id: replyToId || null,
-    });
-
-    // Слушаем подтверждение (сервер вернёт сообщение через 'new_message' в комнату)
-    // Просто убираем спиннер через короткое время
-    setTimeout(() => {
-        const tempEl = document.querySelector(`.message[data-message-id="${tempId}"]`);
-        if (tempEl) {
-            tempEl.classList.remove('sending');
-            const rs = tempEl.querySelector('.read-status');
-            if (rs) rs.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`;
-        }
-    }, 500);
-
-    cancelReply();
-    isSending = false;
-    if (sendButton) {
-        sendButton.disabled = false;
-        sendButton.innerHTML = `<svg width="24" height="24" viewBox="0 0 1024 1024"><use xlink:href="#icon-send"></use></svg>`;
-    }
-    input.focus();
-};
 </script>
 
 <div class="chat-container">
@@ -2460,20 +2390,11 @@ window.sendMessage = function() {
             <div id="replyIndicator" class="reply-indicator" style="display: none;"></div>
 
             <!-- Превью файла -->
-            <div id="filePreview" class="file-preview" style="display: none;">
-                <div class="file-preview-info">
-                    <span class="file-icon">
-                        <svg width="24" height="24" viewBox="0 0 1024 1024">
-                            <use xlink:href="#icon-file"></use>
-                        </svg>
-                    </span>
-                    <div>
-                        <div id="fileName"></div>
-                        <div id="fileSize" class="file-size"></div>
-                    </div>
+            <div id="filePreview" class="file-preview" style="display: none; align-items: center; gap: 12px;">
+                <div class="file-preview-info" style="flex:1; display:flex; align-items:center; gap:12px; min-width:0;">
                 </div>
-                <span class="file-preview-remove" onclick="clearFile()">
-                    <svg width="18" height="18" viewBox="0 0 1024 1024" style="color: var(--danger);">
+                <span class="file-preview-remove" onclick="clearFile()" style="flex-shrink:0;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" style="color: var(--danger);">
                         <use xlink:href="#icon-delete"></use>
                     </svg>
                 </span>

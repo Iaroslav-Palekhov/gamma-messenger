@@ -241,13 +241,19 @@
             <!-- Имя -->
             <div class="form-group">
                 <label>Имя пользователя</label>
-                <input type="text" name="username" value="{{ current_user.username }}" required>
+                <input type="text" name="username" id="usernameInput" value="{{ current_user.username }}" required minlength="5" autocomplete="off">
+                <span id="usernameError" style="display:none; color: var(--error, #e55); font-size: 13px; margin-top: 6px; display: none;">
+                    Минимум 5 символов
+                </span>
             </div>
 
             <!-- Био -->
             <div class="form-group">
-                <label>О себе</label>
-                <textarea name="bio" placeholder="Расскажите немного о себе...">{{ current_user.bio }}</textarea>
+                <label style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>О себе</span>
+                    <span id="bioCounter" style="font-size: 12px; color: var(--text-muted); font-weight: 400; text-transform: none; letter-spacing: 0;">0 / 150</span>
+                </label>
+                <textarea name="bio" id="bioInput" maxlength="150" placeholder="Расскажите немного о себе...">{{ current_user.bio }}</textarea>
             </div>
 
             <!-- Кнопки -->
@@ -268,6 +274,18 @@
 </div>
 
 <script>
+    // Счётчик символов Bio
+    const bioInput = document.getElementById('bioInput');
+    const bioCounter = document.getElementById('bioCounter');
+
+    function updateBioCounter() {
+        const len = bioInput.value.length;
+        bioCounter.textContent = len + ' / 150';
+        bioCounter.style.color = len >= 140 ? (len >= 150 ? 'var(--error, #e55)' : '#f0a500') : 'var(--text-muted)';
+    }
+    updateBioCounter();
+    bioInput.addEventListener('input', updateBioCounter);
+
     // Предпросмотр аватара
     document.getElementById('avatarInput').addEventListener('change', function() {
         if (this.files && this.files[0]) {
@@ -279,9 +297,31 @@
         }
     });
 
+    // Валидация username
+    const usernameInput = document.getElementById('usernameInput');
+    const usernameError = document.getElementById('usernameError');
+
+    usernameInput.addEventListener('input', function() {
+        if (this.value.length > 0 && this.value.length < 5) {
+            usernameError.style.display = 'block';
+            this.style.borderColor = 'var(--error, #e55)';
+        } else {
+            usernameError.style.display = 'none';
+            this.style.borderColor = '';
+        }
+    });
+
     // Сохранение профиля
     document.getElementById('profileForm').addEventListener('submit', function(e) {
         e.preventDefault();
+
+        if (usernameInput.value.length < 5) {
+            usernameError.style.display = 'block';
+            usernameInput.style.borderColor = 'var(--error, #e55)';
+            usernameInput.focus();
+            return;
+        }
+
         const formData = new FormData(this);
 
         fetch('{{ url_for("edit_profile") }}', {

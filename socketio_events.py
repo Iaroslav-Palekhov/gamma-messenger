@@ -264,7 +264,8 @@ def on_send_message(data):
     db.session.add(msg)
     db.session.commit()
 
-    from flask import current_app as _app
+    from flask import current_app
+    _app = current_app._get_current_object()
     payload = _serialize_message(msg, current_user.id, _app)
 
     if chat_id:

@@ -103,7 +103,7 @@
         </div>
 
         <h1 class="profile-name">{{ profile_user.username }}</h1>
-        <div class="profile-bio">
+        <div class="profile-bio" style="white-space: pre-wrap; word-break: break-word;">
             {% if profile_user.bio %}
                 {{ profile_user.bio }}
             {% else %}
