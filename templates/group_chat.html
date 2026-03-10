@@ -1,7 +1,22 @@
 {% extends "base.html" %}
 
 {% block title %}{{ group.name }} - Мессенджер{% endblock %}
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/desktop_sidebar.css') }}">
+</div><!-- /ds-chat-panel -->
+</div><!-- /tg-desktop -->
 
+<style>
+@media (min-width: 901px) { .ds-back-mobile { display: none !important; } }
+</style>
+
+<script src="{{ url_for('static', filename='js/desktop_sidebar.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth > 900) dsStartLiveChats();
+});
+</script>
+{% endblock %}
 {% block content %}
 <style>
     /* Основные стили чата */
@@ -948,6 +963,22 @@
     #pinnedBanner .close-btn:hover {
         color: var(--danger);
     }
+
+/* ═══ MOBILE FIX ═══ */
+@media (max-width: 900px) {
+    .tg-desktop { display: none !important; }
+    .chat-container-mobile {
+        position: fixed !important;
+        top: 0 !important; left: 0 !important;
+        right: 0 !important; bottom: 0 !important;
+        width: 100% !important; height: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        background: var(--bg-primary);
+        z-index: 1;
+    }
+}
 </style>
 
 <script>
@@ -2476,11 +2507,23 @@
     });
 </script>
 
+
+<!-- ════ DESKTOP layout ════ -->
+<div class="tg-desktop">
+{% include '_desktop_sidebar.html' %}
+<div class="ds-chat-panel">
+
+
+<!-- ════ DESKTOP layout ════ -->
+<div class="tg-desktop">
+{% include '_desktop_sidebar.html' %}
+<div class="ds-chat-panel">
+
 <div class="chat-container">
     <!-- Шапка чата -->
     <header class="chat-header">
         <div class="chat-user-info">
-            <a href="{{ url_for('chats') }}" class="btn-icon" style="background: var(--bg-tertiary); color: var(--text-primary);">
+            <a href="{{ url_for('chats') }}" class="btn-icon ds-back-mobile" style="background: var(--bg-tertiary); color: var(--text-primary);">
                 <svg width="24" height="24" viewBox="0 0 1024 1024">
                     <use xlink:href="#icon-back"></use>
                 </svg>
@@ -3079,4 +3122,43 @@ function submitEdit(messageId, btn) {
     </symbol>
 </svg>
 
+</div><!-- /ds-chat-panel -->
+</div><!-- /tg-desktop -->
+
+<style>
+@media (min-width: 901px) { .ds-back-mobile { display: none !important; } }
+</style>
+
+<script src="{{ url_for('static', filename='js/desktop_sidebar.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth > 900) dsStartLiveChats();
+});
+</script>
+
+</div><!-- /ds-chat-panel -->
+</div><!-- /tg-desktop -->
+
+<style>
+@media (min-width: 901px) { .ds-back-mobile { display: none !important; } }
+</style>
+
+<script>
+if (window.innerWidth <= 900) {
+    document.addEventListener('DOMContentLoaded', function() {
+        var chatEl = document.querySelector('.chat-container');
+        if (chatEl) {
+            chatEl.classList.add('chat-container-mobile');
+            document.body.appendChild(chatEl);
+        }
+    });
+}
+</script>
+
+<script src="{{ url_for('static', filename='js/desktop_sidebar.js') }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    if (window.innerWidth > 900) dsStartLiveChats();
+});
+</script>
 {% endblock %}
