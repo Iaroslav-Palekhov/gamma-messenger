@@ -2186,4 +2186,16 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
                 })
         return jsonify(result)
 
+    # ============================================================
+    # СТРАНИЦЫ ПРИЛОЖЕНИЙ
+    # ============================================================
+
+    @app.route('/app')
+    def apps_page():
+        return render_template('app.html')
+
+    @app.route('/app/ntfy')
+    def app_ntfy():
+        return render_template('app_ntfy.html')
+
     return app

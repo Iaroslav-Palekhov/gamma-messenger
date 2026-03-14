@@ -4,8 +4,8 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/desktop_sidebar.css') }}">
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/github-dark.min.css') }}">
+<script src="{{ url_for('static', filename='js/highlight.min.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var isPriv = (typeof IS_PRIVILEGED !== 'undefined') ? IS_PRIVILEGED : false;

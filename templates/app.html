@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block title %}Приложения — Мессенджер{% endblock %}
+
+{% block content %}
+<style>
+    .app-container, .sidebar, .main-content { display: none; }
+
+    .sec-page {
+        min-height: 100vh;
+        background: var(--bg-primary);
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .sec-card {
+        background: var(--bg-secondary);
+        width: 100%;
+        max-width: 560px;
+        min-height: 100vh;
+    }
+
+    .sec-header {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border);
+        position: sticky;
+        top: 0;
+        background: var(--bg-secondary);
+        z-index: 10;
+    }
+
+    .back-btn {
+        width: 40px; height: 40px;
+        border-radius: 50%;
+        background: transparent; border: none;
+        color: var(--text-primary);
+        display: flex; align-items: center; justify-content: center;
+        cursor: pointer; text-decoration: none;
+        flex-shrink: 0; transition: background 0.2s;
+    }
+    .back-btn:hover { background: var(--bg-tertiary); }
+    .sec-header h1 { font-size: 19px; font-weight: 700; color: var(--text-primary); margin: 0; }
+
+    .section {
+        padding: 24px 16px 0;
+    }
+
+    .section-title {
+        font-size: 12px;
+        font-weight: 700;
+        color: var(--accent);
+        text-transform: uppercase;
+        letter-spacing: 0.7px;
+        margin-bottom: 10px;
+        padding: 0 4px;
+    }
+
+    /* Карточка приложения */
+    .app-card {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        background: var(--bg-tertiary);
+        border-radius: 16px;
+        padding: 18px 20px;
+        text-decoration: none;
+        transition: background 0.18s;
+        cursor: pointer;
+        border: none;
+        width: 100%;
+        text-align: left;
+    }
+    .app-card:hover { background: var(--bg-hover, rgba(255,255,255,0.06)); }
+
+    .app-icon {
+        width: 52px; height: 52px;
+        border-radius: 14px;
+        background: var(--accent);
+        display: flex; align-items: center; justify-content: center;
+        flex-shrink: 0;
+    }
+    .app-icon svg { width: 28px; height: 28px; color: #fff; }
+
+    .app-info { flex: 1; min-width: 0; }
+    .app-name {
+        font-size: 15px;
+        font-weight: 700;
+        color: var(--text-primary);
+        margin-bottom: 3px;
+    }
+    .app-desc {
+        font-size: 13px;
+        color: var(--text-secondary);
+        line-height: 1.4;
+    }
+
+    .app-arrow {
+        color: var(--text-muted);
+        flex-shrink: 0;
+    }
+
+    @media (max-width: 560px) { .sec-card { max-width: 100%; } }
+</style>
+
+<div class="sec-page">
+<div class="sec-card">
+
+    <div class="sec-header">
+        <a href="{{ url_for('chats') }}" class="back-btn" title="Назад">
+            <svg width="22" height="22" viewBox="0 0 1024 1024"><use xlink:href="#icon-back"></use></svg>
+        </a>
+        <h1>Приложения</h1>
+    </div>
+
+    <div class="section" style="padding-bottom: 32px;">
+        <div class="section-title">Доступные приложения</div>
+
+        <a href="{{ url_for('app_ntfy') }}" class="app-card">
+            <div class="app-icon">
+                <!-- ntfy bell icon -->
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                    <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                </svg>
+            </div>
+            <div class="app-info">
+                <div class="app-name">ntfy</div>
+                <div class="app-desc">Push-уведомления для мессенджера на Android и iPhone</div>
+            </div>
+            <svg class="app-arrow" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="9 18 15 12 9 6"/>
+            </svg>
+        </a>
+    </div>
+
+</div>
+</div>
+{% endblock %}
