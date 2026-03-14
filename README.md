@@ -1,120 +1,76 @@
-# Gamma Messenger
-
-<div align="center">
+# Papirus Messenger
 
 ![Version](https://img.shields.io/badge/version-1.0.0-blue.svg?cacheSeconds=2592000)
 ![Flask](https://img.shields.io/badge/Flask-2.3.3-green.svg)
 ![Python](https://img.shields.io/badge/Python-3.9+-yellow.svg)
 ![SQLite](https://img.shields.io/badge/SQLite-3-lightblue.svg)
-![License](https://img.shields.io/badge/license-MIT-red.svg)
+![License](https://img.shields.io/badge/license-GPL--3.0-red.svg)
 ![PRs](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)
 
-**Современный мессенджер с групповыми чатами, файлообменником и real-time обновлениями**
+**Современный self-hosted мессенджер с групповыми чатами, файлообменником и real-time обновлениями**
 
-[🌐 Демо](https://chat.termux.ru) · [🐛 Сообщить об ошибке](https://github.com/Iaroslav-Palekhov/gamma-messenger/issues) · [💡 Предложить функцию](https://github.com/Iaroslav-Palekhov/gamma-messenger/issues)
-
-</div>
+[Демо](https://chat.termux.ru) · [Сообщить об ошибке](https://github.com/Iaroslav-Palekhov/gamma-messenger/issues) · [Предложить функцию](https://github.com/Iaroslav-Palekhov/gamma-messenger/issues)
 
 ---
 
 ## Содержание
 
 - [Возможности](#возможности)
-- [Скриншоты](#скриншоты)
 - [Технологический стек](#технологический-стек)
 - [Архитектура](#архитектура)
 - [Быстрый старт](#быстрый-старт)
 - [Конфигурация](#конфигурация)
-- [Структура проекта](#структура-проекта)
 - [API и маршруты](#api-и-маршруты)
+- [Socket.IO события](#socketio-события)
 - [Безопасность](#безопасность)
 - [Участие в разработке](#участие-в-разработке)
+- [Лицензия](#лицензия)
 
 ---
 
 ## Возможности
 
-<table>
-  <tr>
-    <td width="50%">
-      <h3>Личные сообщения</h3>
-      Приватные чаты между пользователями с отметками о прочтении и историей переписки.
-    </td>
-    <td width="50%">
-      <h3>Групповые чаты</h3>
-      Создавайте группы с гибкой системой ролей: владелец, администратор, участник.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>Файлообменник</h3>
-      Отправляйте файлы до 500 МБ — изображения, документы, видео, архивы и исполняемые файлы с автоматической классификацией по типу.
-    </td>
-    <td width="50%">
-      <h3>Превью ссылок</h3>
-      Автоматическое извлечение Open Graph метаданных (заголовок, описание, изображение) из отправленных URL.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>Ответы на сообщения</h3>
-      Цитируйте и отвечайте на конкретные сообщения в диалоге или группе.
-    </td>
-    <td width="50%">
-      <h3>Пересылка</h3>
-      Пересылайте сообщения между чатами и группами с сохранением или скрытием оригинального отправителя.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>Закреплённые сообщения</h3>
-      Закрепляйте важные сообщения в чатах и группах для быстрого доступа.
-    </td>
-    <td width="50%">
-      <h3>Управление сессиями</h3>
-      Просматривайте активные устройства и завершайте сторонние сессии удалённо.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%">
-      <h3>Чёрный список</h3>
-      Блокируйте нежелательных пользователей прямо из профиля или настроек безопасности.
-    </td>
-    <td width="50%">
-      <h3>Адаптивный дизайн</h3>
-      Интерфейс корректно отображается на ПК, планшетах и мобильных устройствах.
-    </td>
-  </tr>
-</table>
+### Сообщения и чаты
 
----
+Приватные чаты между пользователями с отметками о прочтении, историей переписки и индикатором набора текста в реальном времени. Групповые чаты с гибкой системой ролей: владелец, администратор, участник.
 
-## Скриншоты
+Поддерживаются ответы на конкретные сообщения, пересылка между чатами и группами (с сохранением или скрытием оригинального отправителя), закрепление важных сообщений, редактирование и мягкое удаление.
 
-<div align="center">
-  <table>
-    <tr>
-      <td align="center">
-        <img src="screenshots/login.png" alt="Вход в приложение" width="300">
-        <br><em>Страница входа</em>
-      </td>
-      <td align="center">
-        <img src="screenshots/chat.png" alt="Личный чат" width="300">
-        <br><em>Личный чат</em>
-      </td>
-    </tr>
-    <tr>
-      <td align="center">
-        <img src="screenshots/profile.png" alt="Профиль пользователя" width="300">
-        <br><em>Профиль пользователя</em>
-      </td>
-      <td align="center">
-        <img src="screenshots/group_members.png" alt="Участники группы" width="300">
-        <br><em>Участники группы</em>
-      </td>
-    </tr>
-  </table>
-</div>
+### Файлообменник
+
+Отправка файлов до 500 МБ — изображения, документы, видео, архивы и исполняемые файлы. Файлы автоматически классифицируются по типу и сохраняются в раздельные папки. Изображения сжимаются и ресайзятся до 800x800 px при загрузке.
+
+### Превью ссылок
+
+Автоматическое извлечение Open Graph метаданных (заголовок, описание, изображение) из отправленных URL через фоновый поток. Результат доставляется клиенту по Socket.IO без блокировки интерфейса.
+
+### Экспорт истории
+
+Экспорт переписки (личной или групповой) в ZIP-архив: HTML-страница с сообщениями и все вложения. Доступно из интерфейса чата.
+
+### Поиск по сообщениям
+
+Полнотекстовый поиск по истории чата или группы. Возвращает список совпадений с контекстом.
+
+### Медиагалерея
+
+Просмотр всех изображений, файлов или других медиа из чата или группы в одном месте через отдельный эндпоинт.
+
+### Push-уведомления
+
+Интеграция с ntfy (self-hosted или публичный ntfy.sh). Уведомления о новых сообщениях и входах в аккаунт. Топик и сервер настраиваются индивидуально для каждого пользователя, доступна отправка тестового уведомления.
+
+### Управление сессиями
+
+Просмотр всех активных устройств с информацией о браузере, ОС и IP-адресе. Удалённое завершение отдельной сессии или всех сразу. Ntfy-уведомление отправляется при новом входе в аккаунт.
+
+### Контакты и чёрный список
+
+Список контактов с возможностью добавлять и удалять пользователей. Блокировка нежелательных пользователей из профиля или раздела безопасности.
+
+### Адаптивный интерфейс
+
+Отдельный сайдбар и CSS-слой для десктопного разрешения, корректное отображение на планшетах и мобильных устройствах.
 
 ---
 
@@ -124,47 +80,53 @@
 
 | Технология | Версия | Назначение |
 |---|---|---|
-| **Python** | 3.9+ | Основной язык |
-| **Flask** | 2.3.3 | Веб-фреймворк |
-| **Flask-SQLAlchemy** | — | ORM для работы с базой данных |
-| **Flask-Login** | — | Управление аутентификацией и сессиями |
-| **Flask-Compress** | — | Gzip/Brotli сжатие HTTP-ответов |
-| **SQLite / PostgreSQL** | — | База данных (через `DATABASE_URL`) |
-| **Pillow** | — | Обработка и сжатие изображений |
-| **BeautifulSoup4** | — | Парсинг HTML для превью ссылок |
-| **Werkzeug** | — | Утилиты безопасности, обработка файлов |
-| **requests** | — | HTTP-запросы для извлечения метаданных |
+| Python | 3.9+ | Основной язык |
+| Flask | 2.3.3 | Веб-фреймворк |
+| Flask-SQLAlchemy | — | ORM для работы с базой данных |
+| Flask-Login | — | Управление аутентификацией и сессиями |
+| Flask-SocketIO | — | WebSocket / real-time события |
+| Flask-Compress | — | Gzip/Brotli сжатие HTTP-ответов |
+| SQLite / PostgreSQL | — | База данных (переключается через `DATABASE_URL`) |
+| Pillow | — | Обработка и сжатие изображений |
+| BeautifulSoup4 | — | Парсинг HTML для превью ссылок |
+| Werkzeug | — | Утилиты безопасности, обработка файлов |
+| cryptography | — | Опциональное шифрование тела сообщений |
+| user-agents | — | Парсинг User-Agent для страницы устройств |
+| requests | — | HTTP-запросы для извлечения метаданных и ntfy |
 
 ### Frontend
 
 | Технология | Назначение |
 |---|---|
-| **Jinja2** | Шаблонизатор (встроен в Flask) |
-| **JS** | Интерактивность без сторонних фреймворков |
-| **Fetch API** | AJAX-запросы к серверу |
+| Jinja2 | Шаблонизатор (встроен в Flask) |
+| Vanilla JS + Fetch API | Интерактивность без сторонних фреймворков |
+| Socket.IO (клиент) | Real-time обновления |
 
 ### Инфраструктура
 
 | Компонент | Назначение |
 |---|---|
-| **Werkzeug `secure_filename`** | Безопасное сохранение имён файлов |
-| **`secrets` модуль** | Генерация криптографически стойкого `SECRET_KEY` |
-| **UUID4** | Уникальные имена загружаемых файлов |
-| **Connection Pool** | Оптимизированный пул соединений SQLAlchemy |
+| Werkzeug `secure_filename` | Безопасное сохранение имён файлов |
+| `secrets` модуль | Генерация криптографически стойкого `SECRET_KEY` |
+| UUID4 | Уникальные имена загружаемых файлов |
+| Connection Pool | Оптимизированный пул соединений SQLAlchemy |
+| ntfy | Push-уведомления (self-hosted или ntfy.sh) |
 
 ---
 
 ## Архитектура
 
 ```
-gamma-messenger/
-├── papirus.py          # Точка входа, инициализация Flask-приложения
-├── config.py           # Конфигурация (Dev/Production)
-├── models.py           # ORM-модели SQLAlchemy
-├── routing.py          # Регистрация всех маршрутов
-├── security.py         # Инициализация модуля безопасности
-├── utils.py            # Вспомогательные функции (файлы, превью ссылок)
-├── templates/          # Jinja2 HTML-шаблоны
+papirus/
+├── papirus.py              # Точка входа, инициализация Flask-приложения
+├── config.py               # Конфигурация (Dev/Production)
+├── models.py               # ORM-модели SQLAlchemy
+├── routing.py              # Регистрация всех маршрутов и API
+├── socketio_events.py      # Socket.IO обработчики real-time событий
+├── security.py             # Шифрование, хеширование, rate limiting, санитизация
+├── ntfy_notifications.py   # Отправка push-уведомлений через ntfy
+├── utils.py                # Вспомогательные функции (файлы, превью ссылок)
+├── templates/
 │   ├── base.html
 │   ├── chat.html
 │   ├── chats.html
@@ -174,14 +136,24 @@ gamma-messenger/
 │   ├── edit_profile.html
 │   ├── security.html
 │   ├── devices.html
+│   ├── notifications.html
 │   ├── blacklist.html
+│   ├── contacts.html
 │   ├── password.html
 │   ├── login.html
 │   ├── register.html
 │   ├── forgot_password.html
 │   └── reset_password.html
 ├── static/
-│   └── uploads/        # Загружаемые файлы (создаётся автоматически)
+│   ├── css/
+│   │   ├── style.css
+│   │   ├── chats.css
+│   │   └── desktop_sidebar.css
+│   ├── js/
+│   │   ├── script.js
+│   │   ├── desktop_sidebar.js
+│   │   └── socket.io.min.js
+│   └── uploads/            # Создаётся автоматически
 │       ├── avatars/
 │       ├── group_icons/
 │       ├── images/
@@ -191,9 +163,7 @@ gamma-messenger/
 │       ├── archives/
 │       ├── executables/
 │       └── other/
-├── requirements.txt
-├── run_linux.sh
-└── run_windows.bat
+└── requirements.txt
 ```
 
 ### Модели данных
@@ -203,73 +173,55 @@ User ──< Message >── Chat
  │                    │
  ├──< GroupMember >── Group ──< Message
  ├──< UserSession
- └──< BlockedUser
+ ├──< BlockedUser
+ └──< Contact
 ```
 
 | Модель | Описание |
 |---|---|
-| `User` | Аккаунт пользователя: email, username, avatar, bio, статус |
+| `User` | Аккаунт пользователя: email, username, avatar, bio, статус, push_token |
 | `Chat` | Приватный чат между двумя пользователями |
 | `Group` | Групповой чат с иконкой и описанием |
-| `GroupMember` | Связь пользователя с группой + роль (`owner`/`admin`/`member`) |
-| `Message` | Сообщение с поддержкой текста, файлов, ответов, пересылки, закрепления |
-| `UserSession` | Активная сессия пользователя с информацией об устройстве и IP |
-| `BlockedUser` | Запись о блокировке между двумя пользователями |
-| `PasswordReset` | Токен сброса пароля с временем истечения |
+| `GroupMember` | Связь пользователя с группой + роль (`owner` / `admin` / `member`) |
+| `Message` | Сообщение: текст, файл, ответ, пересылка, закреп, превью ссылки, мягкое удаление |
 | `ForwardedMessage` | Метаданные пересланного сообщения |
+| `UserSession` | Активная сессия с информацией об устройстве, браузере и IP |
+| `BlockedUser` | Запись о блокировке между двумя пользователями |
+| `Contact` | Контакт пользователя |
+| `PasswordReset` | Токен сброса пароля с временем истечения |
 
 ---
 
 ## Быстрый старт
 
-### Предварительные требования
+### Требования
 
-- Python **3.9** или выше
-- `pip` (менеджер пакетов Python)
+- Python 3.9 или выше
+- pip
 - Git
 
-### Автоматическая установка
-
-**Linux (Debian/Ubuntu):**
-```bash
-curl -o run_linux.sh https://raw.githubusercontent.com/Iaroslav-Palekhov/gamma-messenger/refs/heads/main/run_linux.sh
-sudo chmod +x ./run_linux.sh
-sudo ./run_linux.sh
-```
-
-**Windows:**
-
-Скачайте и запустите [`run_windows.bat`](https://github.com/Iaroslav-Palekhov/gamma-messenger/blob/main/run_windows.bat)
-
-### Ручная установка
+### Установка
 
 ```bash
-# 1. Клонирование репозитория
+# Клонирование репозитория
 git clone https://github.com/Iaroslav-Palekhov/gamma-messenger.git
 cd gamma-messenger
 
-# 2. Создание виртуального окружения
+# Создание и активация виртуального окружения
 python -m venv venv
+source venv/bin/activate      # Linux / macOS
+venv\Scripts\activate         # Windows
 
-# 3. Активация (Linux/Mac)
-source venv/bin/activate
-# Активация (Windows)
-venv\Scripts\activate
-
-# 4. Установка зависимостей
+# Установка зависимостей
 pip install -r requirements.txt
 
-# 5. Запуск
+# Запуск
 python papirus.py
 ```
 
 После запуска откройте браузер по адресу: **http://localhost:2200**
 
-При первом старте автоматически создаются:
-- Папки для загрузки файлов (`static/uploads/...`)
-- Дефолтные аватарки для пользователей и групп
-- База данных SQLite (`database.db`)
-- Файл `.secret_key` с криптографически стойким ключом
+При первом старте автоматически создаются папки для загрузки файлов, дефолтные аватарки, база данных SQLite (`database.db`) и файл `.secret_key` с криптографически стойким ключом (права `0o600`).
 
 ---
 
@@ -282,21 +234,21 @@ python papirus.py
 | `FLASK_SECRET_KEY` | Авто-генерация | Секретный ключ Flask (обязательно задать в продакшене) |
 | `DATABASE_URL` | `sqlite:///database.db` | URI базы данных. Поддерживает PostgreSQL |
 | `PASSWORD_PEPPER` | `papirus-pepper-...` | Статическая добавка к хешам паролей |
-| `MESSAGE_ENCRYPTION_KEY` | `None` | Ключ шифрования сообщений (опционально) |
+| `MESSAGE_ENCRYPTION_KEY` | `None` | Ключ шифрования тела сообщений (опционально) |
 | `MAX_CONTENT_LENGTH` | `500 МБ` | Максимальный размер загружаемого файла |
+| `NTFY_SERVER` | `https://ntfy.sh` | Адрес ntfy-сервера по умолчанию |
 
 ### Пример `.env` для продакшена
 
 ```env
 FLASK_SECRET_KEY=your-very-long-random-secret-key
-DATABASE_URL=postgresql://user:password@localhost/gamma
+DATABASE_URL=postgresql://user:password@localhost/papirus
 PASSWORD_PEPPER=your-unique-pepper-string
 MESSAGE_ENCRYPTION_KEY=your-32-byte-encryption-key
+NTFY_SERVER=https://ntfy.your-domain.com
 ```
 
 ### Production vs Development
-
-В `config.py` предусмотрены два профиля:
 
 ```python
 # Development (по умолчанию)
@@ -317,99 +269,163 @@ REMEMBER_COOKIE_SECURE = True
 
 | Метод | Путь | Описание |
 |---|---|---|
-| `GET/POST` | `/login` | Вход в аккаунт |
-| `GET/POST` | `/register` | Регистрация |
+| `GET / POST` | `/login` | Вход в аккаунт |
+| `GET / POST` | `/register` | Регистрация |
 | `GET` | `/logout` | Выход |
-| `GET/POST` | `/forgot_password` | Запрос сброса пароля |
-| `GET/POST` | `/reset_password/<token>` | Сброс пароля по токену |
+| `GET / POST` | `/forgot_password` | Запрос сброса пароля |
+| `GET / POST` | `/reset_password/<token>` | Сброс пароля по токену |
 
-### Чаты и сообщения
+### Чаты
 
 | Метод | Путь | Описание |
 |---|---|---|
-| `GET` | `/chats` | Список всех диалогов |
+| `GET` | `/chats` | Список всех диалогов и групп |
 | `GET` | `/chat/<chat_id>` | Открыть личный чат |
-| `GET` | `/start_chat?username=...` | Начать новый диалог |
-| `GET` | `/group/<group_id>` | Открыть групповой чат |
-| `POST` | `/send_message` | Отправить сообщение |
-| `POST` | `/edit_message/<id>` | Редактировать сообщение |
-| `POST` | `/delete_message/<id>` | Удалить сообщение |
-| `POST` | `/pin_message/<id>` | Закрепить сообщение |
-| `POST` | `/forward_message` | Переслать сообщение |
+| `GET / POST` | `/start_chat?username=...` | Начать новый диалог |
+| `POST` | `/chat/<chat_id>/delete` | Удалить чат |
+| `GET` | `/api/get_chats_data` | JSON: список чатов с метаданными |
 
 ### Группы
 
 | Метод | Путь | Описание |
 |---|---|---|
-| `POST` | `/create_group` | Создать группу |
-| `GET` | `/group/<id>/members` | Список участников |
-| `POST` | `/group/<id>/add_member` | Добавить участника |
-| `POST` | `/group/<id>/remove_member/<uid>` | Удалить участника |
-| `POST` | `/group/<id>/change_role/<uid>` | Изменить роль |
-| `POST` | `/group/<id>/leave` | Покинуть группу |
+| `GET` | `/groups` | Список групп пользователя |
+| `POST` | `/group/create` | Создать группу |
+| `GET` | `/group/<group_id>` | Открыть групповой чат |
+| `GET` | `/group/<group_id>/members` | Список участников |
+| `POST` | `/group/<group_id>/add_member` | Добавить участника |
+| `POST` | `/group/<group_id>/remove_member/<user_id>` | Удалить участника |
+| `POST` | `/group/<group_id>/change_role/<user_id>` | Изменить роль участника |
+| `POST` | `/group/<group_id>/edit` | Редактировать название / иконку группы |
+| `POST` | `/group/<group_id>/delete` | Удалить группу (только владелец) |
+| `POST` | `/group/<group_id>/leave` | Покинуть группу |
 
-### Профиль и безопасность
+### Сообщения
 
 | Метод | Путь | Описание |
 |---|---|---|
-| `GET` | `/profile/<user_id>` | Просмотр профиля |
-| `GET/POST` | `/edit_profile` | Редактирование профиля |
+| `POST` | `/send_message` | Отправить сообщение (текст, файл, изображение) |
+| `POST` | `/edit_message/<message_id>` | Редактировать текст сообщения |
+| `POST` | `/delete_message/<message_id>` | Удалить сообщение (мягкое удаление) |
+| `POST` | `/pin_message/<message_id>` | Закрепить сообщение |
+| `POST` | `/unpin_message/<message_id>` | Открепить сообщение |
+| `POST` | `/forward_message` | Переслать сообщение в чат или группу |
+| `GET` | `/get_messages/<chat_id>` | JSON: история сообщений чата |
+| `GET` | `/get_pinned_messages/<context_id>` | JSON: закреплённые сообщения |
+| `GET` | `/get_unread_counts` | JSON: количество непрочитанных по чатам |
+| `GET` | `/get_chats_and_groups_for_forward` | JSON: список доступных получателей для пересылки |
+| `GET` | `/search_messages/<context_id>?q=...&is_group=...` | Поиск по истории чата или группы |
+| `GET` | `/export_chat/<context_id>?is_group=...` | Экспорт переписки в ZIP (HTML + вложения) |
+| `GET` | `/get_media/<context_id>?type=...&is_group=...` | Медиагалерея чата или группы |
+| `GET` | `/download/<filepath>` | Скачать вложение |
+
+### Профиль
+
+| Метод | Путь | Описание |
+|---|---|---|
+| `GET` | `/profile/<user_id>` | Просмотр профиля пользователя |
+| `GET / POST` | `/profile/edit` | Редактирование профиля (имя, биография, аватар) |
+
+### Контакты
+
+| Метод | Путь | Описание |
+|---|---|---|
+| `GET` | `/contacts` | Список контактов |
+| `POST` | `/contacts/add/<user_id>` | Добавить контакт |
+| `POST` | `/contacts/remove/<user_id>` | Удалить контакт |
+
+### Безопасность
+
+| Метод | Путь | Описание |
+|---|---|---|
 | `GET` | `/security` | Раздел безопасности |
-| `POST` | `/security/change_password` | Смена пароля |
-| `GET` | `/security/devices` | Активные устройства |
-| `POST` | `/security/terminate_session/<id>` | Завершить сессию |
-| `POST` | `/security/terminate_all_sessions` | Завершить все сессии |
+| `GET` | `/security/password` | Страница смены пароля |
+| `POST` | `/security/change_password` | Сменить пароль |
+| `GET` | `/security/devices` | Активные сессии (устройства) |
+| `POST` | `/security/terminate_session/<session_id>` | Завершить сессию по ID |
+| `POST` | `/security/terminate_all_sessions` | Завершить все сессии, кроме текущей |
 | `GET` | `/security/blacklist` | Чёрный список |
-| `POST` | `/security/block/<uid>` | Заблокировать пользователя |
-| `POST` | `/security/unblock/<uid>` | Разблокировать пользователя |
+| `POST` | `/security/block/<user_id>` | Заблокировать пользователя |
+| `POST` | `/security/unblock/<user_id>` | Разблокировать пользователя |
+| `GET` | `/security/notifications` | Настройки push-уведомлений (ntfy) |
+| `POST` | `/security/notifications/save` | Сохранить ntfy-топик и сервер |
+| `POST` | `/security/notifications/test` | Отправить тестовое уведомление |
+| `POST` | `/security/notifications/remove` | Отвязать ntfy-топик |
+
+### Утилиты
+
+| Метод | Путь | Описание |
+|---|---|---|
+| `GET` | `/api/search_users?q=...` | Поиск пользователей по имени или email |
+
+---
+
+## Socket.IO события
+
+### Клиент -> Сервер
+
+| Событие | Данные | Описание |
+|---|---|---|
+| `join_chat` | `{ chat_id }` | Подключиться к комнате личного чата |
+| `leave_chat` | `{ chat_id }` | Покинуть комнату личного чата |
+| `join_group` | `{ group_id }` | Подключиться к комнате группы |
+| `leave_group` | `{ group_id }` | Покинуть комнату группы |
+| `send_message` | `{ chat_id / group_id, content, ... }` | Отправить сообщение через WebSocket |
+| `typing` | `{ chat_id / group_id, is_typing }` | Индикатор набора текста |
+| `messages_read` | `{ chat_id / group_id }` | Отметить сообщения как прочитанные |
+| `heartbeat` | — | Поддержание соединения и обновление last_seen |
+
+### Сервер -> Клиент
+
+| Событие | Описание |
+|---|---|
+| `new_message` | Новое сообщение в чате или группе |
+| `chat_updated` | Обновление метаданных чата (последнее сообщение, время) |
+| `group_updated` | Обновление метаданных группы |
+| `message_deleted` | Сообщение удалено |
+| `message_edited` | Текст сообщения изменён |
+| `link_preview_ready` | Превью ссылки готово (доставляется асинхронно) |
+| `typing` | Пользователь набирает сообщение |
+| `user_status` | Изменение статуса пользователя (online / offline + last_seen) |
 
 ---
 
 ## Безопасность
 
-Приложение реализует несколько уровней защиты:
+### Аутентификация и сессии
 
-**Аутентификация и сессии**
-- Хеширование паролей с pepper-добавкой через Werkzeug
-- Уникальный `session_token` для каждой сессии, хранится в БД
-- Принудительный разлогин при удалённом завершении сессии
-- `SESSION_COOKIE_HTTPONLY = True` — защита от XSS-кражи куки
-- `SESSION_COOKIE_SAMESITE = 'Lax'` — защита от CSRF
+Пароли хешируются через Werkzeug с pepper-добавкой (`PASSWORD_PEPPER`). Каждой сессии присваивается уникальный `session_token`, хранящийся в БД. При удалённом завершении сессии токен инвалидируется немедленно. Cookie защищены флагами `HttpOnly` и `SameSite=Lax`; в продакшене включается `Secure`.
 
-**Управление файлами**
-- Все имена файлов обрабатываются через `secure_filename`
-- Файлам присваивается UUID4-префикс во избежание коллизий и directory traversal
-- Автоматическое сжатие и ресайз изображений (макс. 800×800, quality 85)
-- Категоризация по типу с раздельными папками хранения
+Ntfy-уведомление отправляется при каждом новом входе в аккаунт, если пользователь настроил push-топик.
 
-**Контроль доступа**
-- 24-часовая блокировка управления сессиями для новых аккаунтов
-- Ограничение на длину сообщений (`MAX_MESSAGE_LENGTH = 4000`)
-- Rate limiting через `RATELIMIT_ENABLED`
-- Автоматическая генерация `SECRET_KEY` при первом запуске с правами `0o600`
+### Шифрование сообщений
 
-**Сеть**
-- Gzip/Brotli компрессия ответов через `flask-compress`
-- Connection pool с автопроверкой (`pool_pre_ping = True`) и переиспользованием соединений
+При наличии `MESSAGE_ENCRYPTION_KEY` тело сообщений шифруется симметричным алгоритмом через библиотеку `cryptography` перед записью в базу и расшифровывается при чтении.
+
+### Управление файлами
+
+Все имена файлов обрабатываются через `secure_filename`. Файлам присваивается UUID4-префикс для исключения коллизий и directory traversal. Изображения пересжимаются через Pillow (максимум 800x800, quality 85). Хранение разделено по категориям файлов.
+
+### Контроль доступа и rate limiting
+
+Rate limiting реализован через встроенный `RateLimiter` в `security.py` (включается параметром `RATELIMIT_ENABLED`). Новые аккаунты имеют 24-часовое ограничение на управление сессиями. Длина сообщений ограничена `MAX_MESSAGE_LENGTH = 4000`. Все входные данные проходят санитизацию через `InputSanitizer`: обрезка пробелов, проверка на SQL-инъекции, валидация email и имени пользователя. Security headers (CSP, X-Frame-Options, X-Content-Type-Options и др.) устанавливаются через `after_request`.
+
+### Сеть
+
+Gzip/Brotli сжатие ответов через `flask-compress`. Connection pool с `pool_pre_ping=True` и автопереподключением.
 
 ---
 
 ## Участие в разработке
 
-Вклад приветствуется! Пожалуйста, следуйте стандартному GitHub flow:
+Вклад приветствуется. Следуйте стандартному GitHub flow:
 
 ```bash
-# 1. Форкните репозиторий
-# 2. Создайте ветку для вашей функции
+# Форкните репозиторий, затем:
 git checkout -b feature/your-feature-name
-
-# 3. Зафиксируйте изменения
 git commit -m "feat: add your feature"
-
-# 4. Отправьте ветку
 git push origin feature/your-feature-name
-
-# 5. Откройте Pull Request
+# Откройте Pull Request
 ```
 
 ### Соглашение о коммитах
@@ -426,10 +442,8 @@ git push origin feature/your-feature-name
 
 ## Лицензия
 
-Распространяется под лицензией **GPL-3**. Подробнее см. файл [LICENSE](LICENSE).
+Распространяется под лицензией **GPL-3.0**. Подробнее см. файл [LICENSE](LICENSE).
 
 ---
 
-<div align="center">
-  Сделано с ❤️ · <a href="https://github.com/Iaroslav-Palekhov/gamma-messenger">GitHub</a>
-</div>
+Сделано с любовью · [GitHub](https://github.com/Iaroslav-Palekhov/gamma-messenger)
