@@ -202,6 +202,20 @@ User ──< Message >── Chat
 
 ### Установка
 
+### Автоматическая установка
+
+**Linux (Debian/Ubuntu):**
+```bash
+curl -o run_linux.sh https://raw.githubusercontent.com/Iaroslav-Palekhov/gamma-messenger/refs/heads/main/run_linux.sh
+sudo chmod +x ./run_linux.sh
+./run_linux.sh
+```
+
+**Windows:**
+
+Скачайте и запустите [`run_windows.bat`](https://github.com/Iaroslav-Palekhov/gamma-messenger/blob/main/run_windows.bat)
+
+
 ```bash
 # Клонирование репозитория
 git clone https://github.com/Iaroslav-Palekhov/gamma-messenger.git
