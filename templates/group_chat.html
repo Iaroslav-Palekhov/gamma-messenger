@@ -765,6 +765,11 @@ document.addEventListener('DOMContentLoaded', function() {
     .ctx-menu-btn:hover { background: var(--bg-hover); }
     .ctx-menu-btn.danger { color: var(--danger); }
     .message-actions { display: none !important; }
+    .message-bubble {
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+    }
 
     .message-action-btn {
         background: transparent;
@@ -1344,8 +1349,25 @@ document.addEventListener('DOMContentLoaded', function() {
         socket.on('message_edited', (data) => {
             const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
             if (!el) return;
-            const p = el.querySelector('.message-content p');
-            if (p) p.textContent = data.content;
+            const contentDiv = el.querySelector('.message-content');
+            if (contentDiv) {
+                let textEl = contentDiv.querySelector('.message-text');
+                if (!textEl) {
+                    textEl = contentDiv.querySelector('p');
+                }
+                if (textEl) {
+                    const newDiv = document.createElement('div');
+                    newDiv.className = 'message-text';
+                    newDiv.innerHTML = renderContent(data.content, IS_PRIVILEGED);
+                    textEl.replaceWith(newDiv);
+                } else {
+                    const newDiv = document.createElement('div');
+                    newDiv.className = 'message-text';
+                    newDiv.innerHTML = renderContent(data.content, IS_PRIVILEGED);
+                    contentDiv.appendChild(newDiv);
+                }
+                applyHighlighting(contentDiv);
+            }
             const meta = el.querySelector('.message-meta');
             if (meta && !meta.querySelector('.edited-label')) {
                 const span = document.createElement('span');
@@ -2013,9 +2035,9 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     function editMessageById(messageId, bubble) {
-        const contentDiv = bubble ? bubble.querySelector('.message-content p') : null;
+        const contentDiv = bubble ? (bubble.querySelector('.message-content p') || bubble.querySelector('.message-text') || bubble.querySelector('.message-content')) : null;
         if (!contentDiv) return;
-        const currentText = contentDiv.textContent;
+        const currentText = contentDiv.textContent.trim();
         const modal = document.createElement('div');
         modal.className = 'modal active';
         modal.innerHTML = `
@@ -2039,7 +2061,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const container = document.getElementById('messagesContainer');
         if (!container) return;
 
+        // ПКМ на десктопе (только если есть мышь)
         container.addEventListener('contextmenu', e => {
+            e.preventDefault();
+            if (window.matchMedia('(hover: none)').matches) return;
             const bubble = e.target.closest('.message-bubble');
             if (!bubble) return;
             const msgEl = bubble.closest('.message');
@@ -2047,6 +2072,7 @@ document.addEventListener('DOMContentLoaded', function() {
             showContextMenu(e, msgEl);
         });
 
+        // Долгое удержание на мобильных
         container.addEventListener('touchstart', e => {
             const bubble = e.target.closest('.message-bubble');
             if (!bubble) return;
@@ -2055,9 +2081,11 @@ document.addEventListener('DOMContentLoaded', function() {
             _longPressTarget = { msgEl, touch: e.touches[0] };
             _longPressTimer = setTimeout(() => {
                 if (_longPressTarget) {
-                    const fakeE = { preventDefault: ()=>{}, stopPropagation: ()=>{}, clientX: _longPressTarget.touch.clientX, clientY: _longPressTarget.touch.clientY };
-                    showContextMenu(fakeE, _longPressTarget.msgEl);
+                    if (navigator.vibrate) navigator.vibrate(30);
+                    const touch = _longPressTarget.touch;
+                    const target = _longPressTarget.msgEl;
                     _longPressTarget = null;
+                    showContextMenu({ preventDefault:()=>{}, stopPropagation:()=>{}, clientX: touch.clientX, clientY: touch.clientY }, target);
                 }
             }, 500);
         }, { passive: true });

@@ -576,6 +576,11 @@ code.inline-code {
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 /* Context menu for messages */
+.message-bubble {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+}
 .message-context-menu {
     position: fixed;
     background: var(--bg-secondary);
@@ -1443,9 +1448,9 @@ function deleteMessage(messageId) {
 
 // Редактирование по ID (для контекстного меню)
 function editMessageById(messageId, bubble) {
-    const contentDiv = bubble ? bubble.querySelector('.message-content p') : null;
+    const contentDiv = bubble ? (bubble.querySelector('.message-content p') || bubble.querySelector('.message-text') || bubble.querySelector('.message-content')) : null;
     if (!contentDiv) return;
-    const currentText = contentDiv.textContent;
+    const currentText = contentDiv.textContent.trim();
     const modal = document.createElement('div');
     modal.className = 'modal active';
     modal.innerHTML = `
@@ -2252,8 +2257,30 @@ function initWebSocket() {
     socket.on('message_edited', (data) => {
         const el = document.querySelector(`.message[data-message-id="${data.message_id}"]`);
         if (!el) return;
-        const p = el.querySelector('.message-content p');
-        if (p) p.textContent = data.content;
+        const contentDiv = el.querySelector('.message-content');
+        if (contentDiv) {
+            // Сохраняем reply-preview и forwarded-header если есть
+            const reply = contentDiv.querySelector('.reply-preview');
+            const fwd = contentDiv.querySelector('.forwarded-header');
+            // Обновляем текст через renderContent чтобы сохранить форматирование
+            let textEl = contentDiv.querySelector('.message-text');
+            if (!textEl) {
+                textEl = contentDiv.querySelector('p');
+            }
+            if (textEl) {
+                const newDiv = document.createElement('div');
+                newDiv.className = 'message-text';
+                newDiv.innerHTML = renderContent(data.content);
+                textEl.replaceWith(newDiv);
+            } else {
+                // Если элемента нет — создаём
+                const newDiv = document.createElement('div');
+                newDiv.className = 'message-text';
+                newDiv.innerHTML = renderContent(data.content);
+                contentDiv.appendChild(newDiv);
+            }
+            applyHighlighting(contentDiv);
+        }
         const meta = el.querySelector('.message-meta');
         if (meta && !meta.querySelector('.edited-label')) {
             const span = document.createElement('span');
@@ -2494,8 +2521,10 @@ document.addEventListener('DOMContentLoaded', () => {
     const container = document.getElementById('messagesContainer');
     if (!container) return;
 
-    // ПКМ на десктопе
+    // ПКМ на десктопе (только если есть мышь)
     container.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (window.matchMedia('(hover: none)').matches) return;
         const bubble = e.target.closest('.message-bubble');
         if (!bubble) return;
         const msgEl = bubble.closest('.message');
@@ -2512,9 +2541,11 @@ document.addEventListener('DOMContentLoaded', () => {
         _longPressTarget = { msgEl, touch: e.touches[0] };
         _longPressTimer = setTimeout(() => {
             if (_longPressTarget) {
-                const fakeE = { preventDefault: ()=>{}, stopPropagation: ()=>{}, clientX: _longPressTarget.touch.clientX, clientY: _longPressTarget.touch.clientY };
-                showContextMenu(fakeE, _longPressTarget.msgEl);
+                if (navigator.vibrate) navigator.vibrate(30);
+                const touch = _longPressTarget.touch;
+                const target = _longPressTarget.msgEl;
                 _longPressTarget = null;
+                showContextMenu({ preventDefault:()=>{}, stopPropagation:()=>{}, clientX: touch.clientX, clientY: touch.clientY }, target);
             }
         }, 500);
     }, { passive: true });
