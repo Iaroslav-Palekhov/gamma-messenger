@@ -10,7 +10,9 @@
     --text-muted: #667781;
     --border: #3c4a53;
     --sent-message: #005c4b;
+    --sent-message-text: #ffffff;
     --received-message: #1f2c33;
+    --messages-bg: #0e1c26;
     --danger: #df4949;
     --danger-bg: rgba(223, 73, 73, 0.15);
     --success: #00a884;
@@ -21,6 +23,152 @@
     --radius-lg: 30px;
     --radius-md: 12px;
     --radius-sm: 8px;
+}
+
+/* Светлая тема */
+[data-theme="light"] {
+    --bg-primary: #f0f2f5;
+    --bg-secondary: #ffffff;
+    --bg-tertiary: #f0f2f5;
+    --bg-hover: #e8eaed;
+    --accent: #25a87e;
+    --accent-hover: #1e9370;
+    --text-primary: #111b21;
+    --text-secondary: #54656f;
+    --text-muted: #8696a0;
+    --border: #d1d7db;
+    --sent-message: #d9fdd3;
+    --sent-message-text: #111b21;
+    --received-message: #ffffff;
+    --danger: #df4949;
+    --danger-bg: rgba(223, 73, 73, 0.1);
+    --success: #25a87e;
+    --shadow: 0 20px 40px rgba(0, 0, 0, 0.12);
+    --shadow-sm: 0 2px 5px rgba(0, 0, 0, 0.08);
+    --messages-bg: #efeae2;
+    --messages-bg-pattern: none;
+}
+
+/* ============================================================
+   СВЕТЛАЯ ТЕМА — полный набор переопределений
+   ============================================================ */
+
+[data-theme="light"] body {
+    background: linear-gradient(145deg, #f0f2f5 0%, #e8eaed 100%);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .auth-wrapper {
+    background: linear-gradient(145deg, #f0f2f5 0%, #e8eaed 100%);
+}
+
+[data-theme="light"] .form-group input,
+[data-theme="light"] .form-group textarea,
+[data-theme="light"] .form-group select {
+    background: #ffffff;
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+[data-theme="light"] .form-group input:focus,
+[data-theme="light"] .form-group textarea:focus {
+    background: #ffffff;
+    border-color: var(--accent);
+}
+
+[data-theme="light"] .auth-container {
+    border: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+/* Фон области сообщений */
+[data-theme="light"] .messages-container {
+    background-color: var(--messages-bg);
+    background-image: none;
+}
+
+/* Кнопки в input-group */
+[data-theme="light"] .input-group button:hover {
+    background: rgba(0, 0, 0, 0.06) !important;
+}
+
+/* Пузыри сообщений */
+[data-theme="light"] .message.sent .message-bubble,
+[data-theme="light"] .message.sent .message-bubble {
+    color: var(--sent-message-text);
+}
+
+[data-theme="light"] .message.received .message-bubble {
+    color: #111b21;
+}
+
+[data-theme="light"] .message.sent .message-meta {
+    color: rgba(17, 27, 33, 0.55) !important;
+    opacity: 1 !important;
+}
+
+/* Код внутри сообщений */
+[data-theme="light"] pre.code-block {
+    background: rgba(0, 0, 0, 0.06) !important;
+    color: #111b21;
+}
+
+[data-theme="light"] code.inline-code {
+    background: rgba(0, 0, 0, 0.07) !important;
+    color: var(--accent);
+}
+
+/* Файлы */
+[data-theme="light"] .file-message {
+    background: rgba(0, 0, 0, 0.06) !important;
+    border: 1px solid var(--border);
+}
+[data-theme="light"] .file-message:hover {
+    background: rgba(0, 0, 0, 0.1) !important;
+}
+[data-theme="light"] .file-message.sending {
+    background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Превью ссылок */
+[data-theme="light"] .link-preview {
+    background: rgba(0, 0, 0, 0.05) !important;
+    border: 1px solid var(--border) !important;
+}
+[data-theme="light"] .link-preview:hover {
+    background: rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="light"] .message.sent .link-preview {
+    background: rgba(0, 0, 0, 0.08) !important;
+}
+[data-theme="light"] .message.sent .link-preview-title,
+[data-theme="light"] .message.sent .link-preview-description {
+    color: var(--text-primary) !important;
+}
+[data-theme="light"] .message.sent .link-preview-url {
+    color: var(--accent) !important;
+}
+
+/* Reply preview */
+[data-theme="light"] .reply-preview {
+    background: rgba(0, 0, 0, 0.06) !important;
+}
+[data-theme="light"] .reply-preview:hover {
+    background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Forwarded header */
+[data-theme="light"] .forwarded-header {
+    border-bottom: 1px solid var(--border) !important;
+    color: var(--text-muted);
+}
+
+/* Highlight animation */
+[data-theme="light"] .message-bubble.highlighted {
+    animation: highlight-light 1.5s ease;
+}
+@keyframes highlight-light {
+    0% { background: rgba(0, 0, 0, 0.12); }
+    100% { background: var(--sent-message); }
 }
 
 * {
@@ -564,7 +712,7 @@ body {
 
 .message.sent .message-bubble {
     background: var(--sent-message);
-    color: white;
+    color: var(--sent-message-text, white);
     border-bottom-right-radius: 4px;
 }
 
@@ -601,7 +749,8 @@ body {
 }
 
 .message.sent .message-meta {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--sent-message-text, #ffffff);
+    opacity: 0.7;
 }
 
 .message.received .message-meta {

@@ -97,8 +97,8 @@ document.addEventListener('DOMContentLoaded', function() {
     padding: 20px;
     overflow-y: auto;
     overflow-x: hidden;
-    background: #0e1c26;
-    background-image: radial-gradient(circle at 10% 20%, rgba(0, 168, 132, 0.03) 0%, transparent 20%);
+    background-color: var(--messages-bg);
+    background-image: var(--messages-bg-pattern, radial-gradient(circle at 10% 20%, rgba(0, 168, 132, 0.03) 0%, transparent 20%));
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', function() {
 }
 .message.sent .message-bubble {
     background: var(--sent-message);
-    color: white;
+    color: var(--sent-message-text, white);
     border-bottom-right-radius: 4px;
 }
 .message.received .message-bubble {
@@ -217,7 +217,8 @@ code.inline-code {
     font-size: 11px;
 }
 .message.sent .message-meta {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--sent-message-text, white);
+    opacity: 0.7;
 }
 .message.received .message-meta {
     color: var(--text-muted);
@@ -538,10 +539,10 @@ code.inline-code {
 }
 .message.sent .link-preview-title,
 .message.sent .link-preview-description {
-    color: rgba(255, 255, 255, 0.9);
+    color: var(--sent-message-text, rgba(255, 255, 255, 0.9));
 }
 .message.sent .link-preview-url {
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--accent);
 }
 .reply-preview {
     background: rgba(255, 255, 255, 0.1);

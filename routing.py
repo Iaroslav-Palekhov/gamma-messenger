@@ -596,6 +596,11 @@ def register_routes(app, db, login_manager):
 
         return render_template('security.html', sessions=sessions, blocked_count=blocked_count)
 
+    @app.route('/theme')
+    @login_required
+    def theme_page():
+        return render_template('theme.html')
+
     # ============================================================
     # БЕЗОПАСНОСТЬ — СМЕНА ПАРОЛЯ (страница)
     # ============================================================
