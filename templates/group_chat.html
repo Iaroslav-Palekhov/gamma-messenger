@@ -1953,6 +1953,36 @@ document.addEventListener('DOMContentLoaded', function() {
             });
         })();
 
+        // Кнопка "Скачать" — если в сообщении есть файл, фото или аудио
+        (function() {
+            var imgEl = messageEl.querySelector('.message-image');
+            var audioEl = messageEl.querySelector('.audio-player audio');
+            var fileEl = messageEl.querySelector('.file-message');
+
+            if (imgEl) {
+                var imgSrc = imgEl.src;
+                var imgName = imgSrc.split('/').pop().split('?')[0] || 'image';
+                addBtn('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>', 'Скачать', function() {
+                    downloadFile(imgSrc, imgName);
+                });
+            } else if (audioEl) {
+                var audioSrc = audioEl.src;
+                var audioName = audioSrc.split('/').pop().split('?')[0] || 'audio';
+                addBtn('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>', 'Скачать', function() {
+                    downloadFile(audioSrc, audioName);
+                });
+            } else if (fileEl) {
+                var onclickAttr = fileEl.getAttribute('onclick') || '';
+                var match = onclickAttr.match(/downloadFile\(['"]([^'"]+)['"]\s*,\s*['"]([^'"]*)['"]\)/);
+                if (match) {
+                    var fileUrl = match[1], fileName = match[2] || 'file';
+                    addBtn('<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>', 'Скачать', function() {
+                        downloadFile(fileUrl, fileName);
+                    });
+                }
+            }
+        })();
+
         if (isSent && hasText) {
             addBtn(`<svg width="18" height="18" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>`, 'Редактировать', () => {
                 const bubble = messageEl.querySelector('.message-bubble');
