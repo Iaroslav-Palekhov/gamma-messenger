@@ -17,7 +17,7 @@ from datetime import datetime
 import threading
 import time
 
-from models import db, User, Chat, Group, GroupMember, Message, BlockedUser
+from models import db, User, Chat, Group, GroupMember, Message, BlockedUser, Contact, UserPrivacy
 from utils import format_file_size, get_file_category, get_file_icon
 
 socketio = SocketIO(
@@ -142,15 +142,50 @@ def on_disconnect():
 
 
 def _broadcast_status(user_id: int, status: str, last_seen: str = None):
-    """Рассылает обновление статуса всем личным чатам пользователя."""
+    """Рассылает обновление статуса всем личным чатам пользователя с учётом приватности."""
+    # Получаем настройки приватности пользователя
+    privacy = UserPrivacy.query.filter_by(user_id=user_id).first()
+    last_seen_setting = privacy.last_seen if privacy else 'all'
+
+    # Список id контактов пользователя (нужен для режима 'contacts')
+    if last_seen_setting == 'contacts':
+        contact_ids = {
+            c.contact_id for c in Contact.query.filter_by(owner_id=user_id).all()
+        }
+
     chats = Chat.query.filter(
         (Chat.user1_id == user_id) | (Chat.user2_id == user_id)
     ).all()
+
     for chat in chats:
         other_id = chat.user2_id if chat.user1_id == user_id else chat.user1_id
-        payload = {"user_id": user_id, "status": status}
-        if last_seen:
-            payload["last_seen"] = last_seen
+
+        # Определяем что отправить собеседнику в зависимости от настройки
+        if last_seen_setting == 'all':
+            # Всё как раньше — статус и точное время
+            payload = {"user_id": user_id, "status": status}
+            if last_seen:
+                payload["last_seen"] = last_seen
+
+        elif last_seen_setting == 'contacts':
+            # Только контакты видят точное время; остальные — «был(а) недавно»
+            payload = {"user_id": user_id, "status": status}
+            if other_id in contact_ids:
+                if last_seen:
+                    payload["last_seen"] = last_seen
+            else:
+                # Если уходит офлайн — скрываем точное время
+                if status == 'offline':
+                    payload["last_seen"] = "недавно"
+
+        else:  # nobody
+            # Никто не видит точное время; онлайн-статус показываем только пока online
+            if status == 'online':
+                payload = {"user_id": user_id, "status": "online"}
+            else:
+                # Уходя офлайн отправляем «недавно» вместо точного времени
+                payload = {"user_id": user_id, "status": "offline", "last_seen": "недавно"}
+
         socketio.emit("user_status", payload, to=f"user_{other_id}")
 
 
@@ -259,6 +294,11 @@ def on_send_message(data):
         membership = GroupMember.query.filter_by(group_id=group_id, user_id=current_user.id).first()
         if not membership:
             return
+        # Проверка прав на запись
+        if getattr(group, 'write_permission', 'all') == 'admins_only':
+            if membership.role not in ['owner', 'admin']:
+                emit("error", {"message": "write_restricted"})
+                return
         msg.group_id = group_id
         group.last_message_at = datetime.utcnow()
     else:

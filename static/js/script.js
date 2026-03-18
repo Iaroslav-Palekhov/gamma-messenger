@@ -98,7 +98,12 @@ document.addEventListener('DOMContentLoaded', function() {
     if (imageModal) {
         imageModal.addEventListener('click', function(e) {
             if (e.target === this || e.target.classList.contains('close-modal')) {
-                this.style.display = 'none';
+                if (typeof closeImageModal === 'function') {
+                    closeImageModal();
+                } else {
+                    this.classList.remove('active');
+                    this.style.display = '';
+                }
             }
         });
     }

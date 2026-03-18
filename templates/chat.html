@@ -1088,7 +1088,7 @@ function sendMessage() {
                 <div class="message-wrapper"><div class="message-bubble">
                     ${rpHtml}
                     <div class="message-content">
-                        ${(()=>{const _f=fileInput.files[0];const _ext=_f.name.split('.').pop().toLowerCase();const _isImg=['jpg','jpeg','png','gif','webp','bmp'].includes(_ext);const _ico=getFileIcon(_ext);if(_isImg){const _url=URL.createObjectURL(_f);return `<div class="file-message sending"><span class="file-icon"><img src="${_url}" style="width:40px;height:40px;object-fit:cover;border-radius:6px;"></span><div class="file-info"><div class="file-name">${escapeHtml(_f.name)}</div><div class="file-size">Отправка...</div></div></div>`;}return `<div class="file-message sending"><span class="file-icon"><svg width="32" height="32" viewBox="0 0 24 24"><use xlink:href="${_ico}"></use></svg></span><div class="file-info"><div class="file-name">${escapeHtml(_f.name)}</div><div class="file-size">Отправка...</div></div></div>`;})()}
+                        ${(()=>{const _f=fileInput.files[0];const _ext=_f.name.split('.').pop().toLowerCase();const _isImg=['jpg','jpeg','png','gif','webp','bmp'].includes(_ext);const _ico=getFileIcon(_ext);if(_isImg){const _url=URL.createObjectURL(_f);return `<div style="position:relative;display:inline-block;"><img src="${_url}" class="message-image" style="opacity:0.7;"><div style="position:absolute;bottom:6px;right:6px;background:rgba(0,0,0,0.5);border-radius:50%;padding:4px;display:flex;"><svg width="16" height="16" viewBox="0 0 1024 1024" class="spinning" style="color:white;"><use xlink:href="#icon-loading"></use></svg></div></div>`;}return `<div class="file-message sending"><span class="file-icon"><svg width="32" height="32" viewBox="0 0 24 24"><use xlink:href="${_ico}"></use></svg></span><div class="file-info"><div class="file-name">${escapeHtml(_f.name)}</div><div class="file-size">Отправка...</div></div></div>`;})()}
                         ${fileText.trim() ? `<p style="white-space:pre-wrap;word-break:break-word;margin:6px 0 0 0;">${escapeHtml(fileText)}</p>` : ''}
                     </div>
                     <div class="message-meta">
@@ -2065,7 +2065,11 @@ document.addEventListener('keydown', function(event) {
 document.querySelectorAll('.modal').forEach(modal => {
     modal.addEventListener('click', function(e) {
         if (e.target === this) {
-            this.classList.remove('active');
+            if (this.id === 'imageModal') {
+                closeImageModal();
+            } else {
+                this.classList.remove('active');
+            }
         }
     });
 });
@@ -2119,6 +2123,19 @@ function initWebSocket() {
                 tempEl.dataset.messageId = message.id;
                 tempEl.classList.remove('sending');
                 sendingMessageId = null;
+                // Обновляем контент — заменяем временный превью на финальный
+                const cd = tempEl.querySelector('.message-content');
+                if (cd) {
+                    let h = '';
+                    if (message.image_path) h += `<img src="${message.image_path}" class="message-image" onclick="openImageModal(this.src)">`;
+                    else if (message.file_path) {
+                        const fn = message.file_name||'Файл', ext = fn.split('.').pop().toLowerCase();
+                        const ico = ['jpg','jpeg','png','gif','webp'].includes(ext)?'#icon-image':ext==='pdf'?'#icon-pdf':['zip','rar','7z'].includes(ext)?'#icon-zip':'#icon-file';
+                        h += `<div class="file-message" onclick="downloadFile('${message.file_path}','${escapeHtml(fn)}')"><span class="file-icon"><svg width="32" height="32" viewBox="0 0 1024 1024"><use xlink:href="${ico}"></use></svg></span><div class="file-info"><div class="file-name">${escapeHtml(fn)}</div><div class="file-size">${message.file_size||''}</div></div><span style="font-size:20px;"><svg width="20" height="20" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg></span></div>`;
+                    }
+                    if (message.content) h += `<div class="message-text" style="margin:${(message.file_path||message.image_path)?'6px 0 0 0':'0'};">${renderContent(message.content)}</div>`;
+                    if (message.image_path || message.file_path) cd.innerHTML = h;
+                }
                 // Убираем спиннер
                 const rs = tempEl.querySelector('.read-status');
                 if (rs) { rs.innerHTML = `<svg width="16" height="16" viewBox="0 0 1024 1024"><use xlink:href="#icon-check"></use></svg>`; rs.classList.remove('spinning'); }
@@ -2477,12 +2494,19 @@ function showContextMenu(e, messageEl) {
         }
     })();
 
-    if (isSent) {
-        const pinBtn = messageEl.querySelector(`button[onclick*="pinMessage"]`);
-        const unpinBtn = messageEl.querySelector(`button[onclick*="unpinMessage"]`);
-        if (pinBtn) addBtn(`<svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>`, 'Закрепить', () => pinMessage(msgId));
-        if (unpinBtn) addBtn(`<svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>`, 'Открепить', () => unpinMessage(msgId));
-    }
+    // Закрепить/открепить — доступно для любого сообщения (своего и собеседника)
+    (function() {
+        const unpinBtn = messageEl.querySelector(`button[onclick*="unpinMessage(${msgId})"]`);
+        const pinBtn = messageEl.querySelector(`button[onclick*="pinMessage(${msgId})"]`);
+        if (unpinBtn) {
+            addBtn(`<svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>`, 'Открепить', () => unpinMessage(msgId));
+        } else if (pinBtn) {
+            addBtn(`<svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>`, 'Закрепить', () => pinMessage(msgId));
+        } else {
+            // Входящие сообщения без явных кнопок в DOM — показываем «Закрепить» по умолчанию
+            addBtn(`<svg width="18" height="18" viewBox="0 0 1024 1024"><use xlink:href="#icon-attach"></use></svg>`, 'Закрепить', () => pinMessage(msgId));
+        }
+    })();
 
     if (isSent && hasText) {
         addBtn(`<svg width="18" height="18" viewBox="0 0 24 24"><use xlink:href="#icon-edit"></use></svg>`, 'Редактировать', () => {
@@ -2580,17 +2604,19 @@ document.addEventListener('DOMContentLoaded', () => {
                     alt="Avatar"
                     class="avatar"
                     onerror="this.src='{{ url_for('static', filename='uploads/avatars/default.png') }}'">
-                <span class="status {{ other_user.status if other_user.status else 'offline' }}"
+                <span class="status {{ other_status_display if other_status_display else 'offline' }}"
                     id="userStatusDot"
                     style="position: absolute; bottom: 0; right: 0; width: 12px; height: 12px;"></span>
             </div>
             <div class="chat-user-details" onclick="window.location.href='{{ url_for('profile', user_id=other_user.id) }}'" style="cursor: pointer;">
                 <h2>{{ other_user.username if other_user.username else other_user.email.split('@')[0] }}</h2>
                 <p id="userStatusText">
-                    {% if other_user.status == 'online' %}
+                    {% if other_status_display == 'online' %}
                         <span class="status online"></span> Онлайн
+                    {% elif other_last_seen_display == 'недавно' %}
+                        <span class="status offline"></span> Был(а) недавно
                     {% else %}
-                        <span class="status offline"></span> Был(а) {{ other_user.last_seen.strftime('%H:%M %d.%m.%Y') if other_user.last_seen else 'давно' }}
+                        <span class="status offline"></span> Был(а) {{ other_last_seen_display if other_last_seen_display else 'давно' }}
                     {% endif %}
                 </p>
             </div>

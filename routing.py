@@ -13,7 +13,7 @@ import zipfile
 import io
 import shutil
 
-from models import User, Group, GroupMember, Chat, Message, ForwardedMessage, PasswordReset, UserSession, BlockedUser, Contact
+from models import User, Group, GroupMember, Chat, Message, ForwardedMessage, PasswordReset, UserSession, BlockedUser, Contact, UserPrivacy
 from socketio_events import socketio
 from utils import (
     compress_image, get_file_category, get_file_icon,
@@ -24,13 +24,94 @@ from utils import (
 def register_routes(app, db, login_manager):
 
     @app.after_request
-    def add_cache_headers(response):
-        """Кэшируем статику на 30 дней, HTML не кэшируем."""
+    def chunk_and_cache(response):
+        """
+        1. Кэширование: статика 30 дней, HTML без кэша.
+        2. Chunked streaming: все ответы > 10 КБ режутся на куски,
+           чтобы обойти обрыв соединений на 16 КБ.
+        """
+        from flask import Response, stream_with_context as _swc
+
+        # --- Кэш-заголовки ---
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
         elif response.content_type and 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        return response
+
+        # --- Chunked streaming ---
+        # Пропускаем редиректы, 204/304, SSE, direct_passthrough
+        if (response.status_code in (204, 304)
+                or 300 <= response.status_code < 400
+                or response.direct_passthrough
+                or 'text/event-stream' in response.headers.get('Content-Type', '')):
+            return response
+
+        CHUNK = 10 * 1024  # 10 КБ
+
+        data = response.get_data()
+        if not data or len(data) <= CHUNK:
+            return response  # маленький ответ — не трогаем
+
+        response.headers.pop('Content-Length', None)
+        response.headers['Transfer-Encoding'] = 'chunked'
+
+        def _gen(body):
+            for i in range(0, len(body), CHUNK):
+                yield body[i:i + CHUNK]
+
+        return Response(
+            _swc(_gen(data)),
+            status=response.status_code,
+            headers=dict(response.headers),
+            content_type=response.content_type,
+        )
+
+    @app.route('/static/<path:filepath>')
+    def serve_static_chunked(filepath):
+        """
+        Перехватывает ВСЕ /static/ файлы и отдаёт чанками по 10 КБ.
+        Маленькие файлы (<=10KB) отдаются как есть.
+        """
+        from flask import Response, stream_with_context as _swc
+        import mimetypes as _m
+
+        full_path = os.path.realpath(os.path.join(app.root_path, 'static', filepath))
+        static_root = os.path.realpath(os.path.join(app.root_path, 'static'))
+
+        if not full_path.startswith(static_root):
+            return '', 403
+        if not os.path.isfile(full_path):
+            return '', 404
+
+        mime = _m.guess_type(full_path)[0] or 'application/octet-stream'
+        CHUNK = 10 * 1024  # 10 КБ
+        file_size = os.path.getsize(full_path)
+
+        # Маленький файл — отдаём целиком, без лишнего overhead
+        if file_size <= CHUNK:
+            with open(full_path, 'rb') as f:
+                data = f.read()
+            resp = Response(data, mimetype=mime)
+            resp.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
+            return resp
+
+        # Большой файл — стримим чанками
+        def _gen():
+            with open(full_path, 'rb') as f:
+                while True:
+                    chunk = f.read(CHUNK)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        return Response(
+            _swc(_gen()),
+            mimetype=mime,
+            headers={
+                'Cache-Control': 'public, max-age=2592000, immutable',
+                'Content-Disposition': f'inline; filename="{os.path.basename(filepath)}"',
+            }
+        )
 
     # ============================================================
     # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СЕССИЙ
@@ -99,6 +180,36 @@ def register_routes(app, db, login_manager):
             ((BlockedUser.blocker_id == user_a_id) & (BlockedUser.blocked_id == user_b_id)) |
             ((BlockedUser.blocker_id == user_b_id) & (BlockedUser.blocked_id == user_a_id))
         ).first() is not None
+
+    def _get_status_display(target_user, viewer_id):
+        """Возвращает статус target_user с учётом его настроек приватности."""
+        if target_user.id == viewer_id:
+            return target_user.status
+        privacy = UserPrivacy.query.filter_by(user_id=target_user.id).first()
+        setting = privacy.last_seen if privacy else 'all'
+        if setting == 'nobody':
+            return target_user.status if target_user.status == 'online' else 'offline'
+        if setting == 'contacts':
+            i_am_contact = Contact.query.filter_by(owner_id=target_user.id, contact_id=viewer_id).first() is not None
+            if not i_am_contact:
+                return target_user.status if target_user.status == 'online' else 'offline'
+        return target_user.status
+
+    def _get_last_seen_display(target_user, viewer_id):
+        """Возвращает строку last_seen с учётом приватности. None если не показывать точное время."""
+        if target_user.id == viewer_id:
+            return target_user.last_seen.strftime('%d.%m.%Y %H:%M') if target_user.last_seen else None
+        if target_user.status == 'online':
+            return None
+        privacy = UserPrivacy.query.filter_by(user_id=target_user.id).first()
+        setting = privacy.last_seen if privacy else 'all'
+        if setting == 'nobody':
+            return 'недавно'
+        if setting == 'contacts':
+            i_am_contact = Contact.query.filter_by(owner_id=target_user.id, contact_id=viewer_id).first() is not None
+            if not i_am_contact:
+                return 'недавно'
+        return target_user.last_seen.strftime('%d.%m.%Y %H:%M') if target_user.last_seen else 'давно'
 
     # ============================================================
     # ИНДЕКС
@@ -350,6 +461,23 @@ def register_routes(app, db, login_manager):
         if _is_blocked_between(current_user.id, other_user.id):
             return redirect(url_for('chats'))
 
+        # Проверяем настройку приватности собеседника: кто может писать ему
+        other_privacy = UserPrivacy.query.filter_by(user_id=other_user.id).first()
+        if other_privacy and other_privacy.who_can_write == 'contacts':
+            # Разрешаем только если current_user есть в контактах собеседника
+            is_in_contacts = Contact.query.filter_by(
+                owner_id=other_user.id, contact_id=current_user.id
+            ).first() is not None
+            if not is_in_contacts:
+                # Чат уже существует — можно открыть (собеседник сам начал)
+                existing = Chat.query.filter(
+                    ((Chat.user1_id == current_user.id) & (Chat.user2_id == other_user.id)) |
+                    ((Chat.user1_id == other_user.id) & (Chat.user2_id == current_user.id))
+                ).first()
+                if existing:
+                    return redirect(url_for('chat', chat_id=existing.id))
+                return redirect(url_for('chats'))
+
         existing_chat = Chat.query.filter(
             ((Chat.user1_id == current_user.id) & (Chat.user2_id == other_user.id)) |
             ((Chat.user1_id == other_user.id) & (Chat.user2_id == current_user.id))
@@ -407,9 +535,15 @@ def register_routes(app, db, login_manager):
         # Проверяем блокировку между участниками
         chat_is_blocked = _is_blocked_between(current_user.id, other_user.id)
 
+        # Применяем настройки приватности собеседника для отображения статуса
+        other_status_display = _get_status_display(other_user, current_user.id)
+        other_last_seen_display = _get_last_seen_display(other_user, current_user.id)
+
         return render_template('chat.html', chat=chat_obj, messages=messages,
                                other_user=other_user, pinned_messages=pinned_messages,
-                               chat_is_blocked=chat_is_blocked)
+                               chat_is_blocked=chat_is_blocked,
+                               other_status_display=other_status_display,
+                               other_last_seen_display=other_last_seen_display)
 
     @app.route('/chat/<int:chat_id>/delete', methods=['POST'])
     @login_required
@@ -474,7 +608,7 @@ def register_routes(app, db, login_manager):
                 'other_user_id': other_user.id,
                 'other_username': other_user.username,
                 'other_avatar': url_for('static', filename=f'uploads/{other_user.avatar}'),
-                'other_status': other_user.status,
+                'other_status': _get_status_display(other_user, current_user.id),
                 'last_message': last_message_preview,
                 'last_message_time': chat.last_message_at.strftime('%H:%M') if chat.last_message_at else '',
                 'unread_count': unread_count,
@@ -546,7 +680,9 @@ def register_routes(app, db, login_manager):
                 contact_id=user.id
             ).first() is not None
 
-        return render_template('profile.html', profile_user=user, is_blocked=is_blocked, is_contact=is_contact)
+        return render_template('profile.html', profile_user=user, is_blocked=is_blocked, is_contact=is_contact,
+                               profile_status_display=_get_status_display(user, current_user.id),
+                               profile_last_seen_display=_get_last_seen_display(user, current_user.id))
 
     @app.route('/profile/edit', methods=['GET', 'POST'])
     @login_required
@@ -777,6 +913,46 @@ def register_routes(app, db, login_manager):
         db.session.delete(block)
         db.session.commit()
         return jsonify({'success': True})
+
+    # ============================================================
+    # ПРИВАТНОСТЬ
+    # ============================================================
+
+    @app.route('/security/privacy')
+    @login_required
+    def security_privacy():
+        """Страница настроек приватности."""
+        privacy = UserPrivacy.query.filter_by(user_id=current_user.id).first()
+        if not privacy:
+            privacy = UserPrivacy(user_id=current_user.id)
+            db.session.add(privacy)
+            db.session.commit()
+        return render_template('privacy.html', privacy=privacy)
+
+    @app.route('/security/privacy', methods=['POST'])
+    @login_required
+    def security_privacy_save():
+        """Сохраняет настройку приватности (AJAX)."""
+        data = request.get_json(silent=True) or {}
+        setting = data.get('setting')
+        value   = data.get('value')
+
+        allowed = {
+            'who_can_write': ('all', 'contacts'),
+            'last_seen':     ('all', 'contacts', 'nobody'),
+        }
+
+        if setting not in allowed or value not in allowed[setting]:
+            return jsonify({'ok': False, 'error': 'Недопустимое значение'}), 400
+
+        privacy = UserPrivacy.query.filter_by(user_id=current_user.id).first()
+        if not privacy:
+            privacy = UserPrivacy(user_id=current_user.id)
+            db.session.add(privacy)
+
+        setattr(privacy, setting, value)
+        db.session.commit()
+        return jsonify({'ok': True})
 
     # ============================================================
     # КОНТАКТЫ
@@ -1157,6 +1333,23 @@ def register_routes(app, db, login_manager):
         db.session.commit()
         return redirect(url_for('group_chat', group_id=group.id))
 
+    @app.route('/group/<int:group_id>/set_write_permission', methods=['POST'])
+    @login_required
+    def set_group_write_permission(group_id):
+        group = Group.query.get_or_404(group_id)
+        membership = GroupMember.query.filter_by(
+            group_id=group_id,
+            user_id=current_user.id
+        ).first()
+        if not membership or membership.role not in ['owner', 'admin']:
+            return jsonify({'error': 'Недостаточно прав'}), 403
+        permission = request.json.get('write_permission', 'all')
+        if permission not in ['all', 'admins_only']:
+            return jsonify({'error': 'Неверное значение'}), 400
+        group.write_permission = permission
+        db.session.commit()
+        return jsonify({'success': True, 'write_permission': group.write_permission})
+
     @app.route('/group/<int:group_id>/delete', methods=['POST'])
     @login_required
     def delete_group(group_id):
@@ -1266,6 +1459,11 @@ def register_routes(app, db, login_manager):
 
             if not membership:
                 return jsonify({'error': 'Нет доступа'}), 403
+
+            # Проверка прав на запись
+            if getattr(group, 'write_permission', 'all') == 'admins_only':
+                if membership.role not in ['owner', 'admin']:
+                    return jsonify({'error': 'write_restricted'}), 403
 
             message.group_id      = group_id
             group.last_message_at = datetime.utcnow()
@@ -1662,6 +1860,40 @@ def register_routes(app, db, login_manager):
         # Кэшируем файлы на 7 дней (они иммутабельны — uuid в имени)
         response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return response
+
+    @app.route('/media/<path:filepath>')
+    @login_required
+    def serve_media_chunked(filepath):
+        """Отдаёт файлы чанками по 10 КБ — обходит лимит 16 КБ на соединение."""
+        from flask import Response, stream_with_context
+        import mimetypes as _mime
+        full_path = os.path.join(app.root_path, app.config['UPLOAD_FOLDER'], filepath)
+        if not os.path.isfile(full_path):
+            return '', 404
+        # Проверяем что путь не выходит за пределы upload_folder
+        upload_root = os.path.realpath(os.path.join(app.root_path, app.config['UPLOAD_FOLDER']))
+        if not os.path.realpath(full_path).startswith(upload_root):
+            return '', 403
+        mime = _mime.guess_type(full_path)[0] or 'application/octet-stream'
+        chunk_size = 10 * 1024  # 10 КБ — меньше лимита 16 КБ
+
+        def generate():
+            with open(full_path, 'rb') as f:
+                while True:
+                    chunk = f.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+
+        resp = Response(
+            stream_with_context(generate()),
+            mimetype=mime,
+            headers={
+                'Cache-Control': 'public, max-age=604800, immutable',
+                'Transfer-Encoding': 'chunked',
+            }
+        )
+        return resp
 
     @app.route('/delete_message/<int:message_id>', methods=['POST'])
     @login_required

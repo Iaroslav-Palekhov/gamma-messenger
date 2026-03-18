@@ -128,13 +128,15 @@
             </div>
             <div class="stat-item">
                 <div class="stat-value">
-                    <span class="status {{ profile_user.status }}" id="profileStatusDot"></span>
+                    <span class="status {{ profile_status_display }}" id="profileStatusDot"></span>
                 </div>
                 <div class="stat-label" id="profileStatusLabel">
-                    {% if profile_user.status == 'online' %}
+                    {% if profile_status_display == 'online' %}
                         В сети
+                    {% elif profile_last_seen_display == 'недавно' %}
+                        Был(а) недавно
                     {% else %}
-                        Был(а) {{ profile_user.last_seen.strftime('%d.%m.%Y %H:%M') if profile_user.last_seen else 'давно' }}
+                        Был(а) {{ profile_last_seen_display if profile_last_seen_display else 'давно' }}
                     {% endif %}
                 </div>
             </div>

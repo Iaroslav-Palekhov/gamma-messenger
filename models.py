@@ -27,6 +27,7 @@ class Group(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), nullable=False)
     description = db.Column(db.String(500), default='')
+    write_permission = db.Column(db.String(20), default='all', nullable=False)  # 'all' or 'admins_only'
     icon = db.Column(db.String(200), default='group_icons/default.png')
     owner_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -193,6 +194,19 @@ class Contact(db.Model):
     contact_user = db.relationship('User', foreign_keys=[contact_id])
 
     __table_args__ = (db.UniqueConstraint('owner_id', 'contact_id', name='unique_contact'),)
+
+
+class UserPrivacy(db.Model):
+    """Настройки приватности пользователя."""
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False, unique=True, index=True)
+    # Кто может писать: 'all' | 'contacts'
+    who_can_write = db.Column(db.String(20), default='all', nullable=False)
+    # Кто видит время захода: 'all' | 'contacts' | 'nobody'
+    last_seen = db.Column(db.String(20), default='all', nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User', backref=db.backref('privacy_settings', uselist=False, lazy=True))
 
 
 class BlockedUser(db.Model):
