@@ -24,94 +24,13 @@ from utils import (
 def register_routes(app, db, login_manager):
 
     @app.after_request
-    def chunk_and_cache(response):
-        """
-        1. Кэширование: статика 30 дней, HTML без кэша.
-        2. Chunked streaming: все ответы > 10 КБ режутся на куски,
-           чтобы обойти обрыв соединений на 16 КБ.
-        """
-        from flask import Response, stream_with_context as _swc
-
-        # --- Кэш-заголовки ---
+    def add_cache_headers(response):
+        """Кэшируем статику на 30 дней, HTML не кэшируем."""
         if request.path.startswith('/static/'):
             response.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
         elif response.content_type and 'text/html' in response.content_type:
             response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-
-        # --- Chunked streaming ---
-        # Пропускаем редиректы, 204/304, SSE, direct_passthrough
-        if (response.status_code in (204, 304)
-                or 300 <= response.status_code < 400
-                or response.direct_passthrough
-                or 'text/event-stream' in response.headers.get('Content-Type', '')):
-            return response
-
-        CHUNK = 10 * 1024  # 10 КБ
-
-        data = response.get_data()
-        if not data or len(data) <= CHUNK:
-            return response  # маленький ответ — не трогаем
-
-        response.headers.pop('Content-Length', None)
-        response.headers['Transfer-Encoding'] = 'chunked'
-
-        def _gen(body):
-            for i in range(0, len(body), CHUNK):
-                yield body[i:i + CHUNK]
-
-        return Response(
-            _swc(_gen(data)),
-            status=response.status_code,
-            headers=dict(response.headers),
-            content_type=response.content_type,
-        )
-
-    @app.route('/static/<path:filepath>')
-    def serve_static_chunked(filepath):
-        """
-        Перехватывает ВСЕ /static/ файлы и отдаёт чанками по 10 КБ.
-        Маленькие файлы (<=10KB) отдаются как есть.
-        """
-        from flask import Response, stream_with_context as _swc
-        import mimetypes as _m
-
-        full_path = os.path.realpath(os.path.join(app.root_path, 'static', filepath))
-        static_root = os.path.realpath(os.path.join(app.root_path, 'static'))
-
-        if not full_path.startswith(static_root):
-            return '', 403
-        if not os.path.isfile(full_path):
-            return '', 404
-
-        mime = _m.guess_type(full_path)[0] or 'application/octet-stream'
-        CHUNK = 10 * 1024  # 10 КБ
-        file_size = os.path.getsize(full_path)
-
-        # Маленький файл — отдаём целиком, без лишнего overhead
-        if file_size <= CHUNK:
-            with open(full_path, 'rb') as f:
-                data = f.read()
-            resp = Response(data, mimetype=mime)
-            resp.headers['Cache-Control'] = 'public, max-age=2592000, immutable'
-            return resp
-
-        # Большой файл — стримим чанками
-        def _gen():
-            with open(full_path, 'rb') as f:
-                while True:
-                    chunk = f.read(CHUNK)
-                    if not chunk:
-                        break
-                    yield chunk
-
-        return Response(
-            _swc(_gen()),
-            mimetype=mime,
-            headers={
-                'Cache-Control': 'public, max-age=2592000, immutable',
-                'Content-Disposition': f'inline; filename="{os.path.basename(filepath)}"',
-            }
-        )
+        return response
 
     # ============================================================
     # ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ СЕССИЙ
@@ -1860,40 +1779,6 @@ def register_routes(app, db, login_manager):
         # Кэшируем файлы на 7 дней (они иммутабельны — uuid в имени)
         response.headers['Cache-Control'] = 'public, max-age=604800, immutable'
         return response
-
-    @app.route('/media/<path:filepath>')
-    @login_required
-    def serve_media_chunked(filepath):
-        """Отдаёт файлы чанками по 10 КБ — обходит лимит 16 КБ на соединение."""
-        from flask import Response, stream_with_context
-        import mimetypes as _mime
-        full_path = os.path.join(app.root_path, app.config['UPLOAD_FOLDER'], filepath)
-        if not os.path.isfile(full_path):
-            return '', 404
-        # Проверяем что путь не выходит за пределы upload_folder
-        upload_root = os.path.realpath(os.path.join(app.root_path, app.config['UPLOAD_FOLDER']))
-        if not os.path.realpath(full_path).startswith(upload_root):
-            return '', 403
-        mime = _mime.guess_type(full_path)[0] or 'application/octet-stream'
-        chunk_size = 10 * 1024  # 10 КБ — меньше лимита 16 КБ
-
-        def generate():
-            with open(full_path, 'rb') as f:
-                while True:
-                    chunk = f.read(chunk_size)
-                    if not chunk:
-                        break
-                    yield chunk
-
-        resp = Response(
-            stream_with_context(generate()),
-            mimetype=mime,
-            headers={
-                'Cache-Control': 'public, max-age=604800, immutable',
-                'Transfer-Encoding': 'chunked',
-            }
-        )
-        return resp
 
     @app.route('/delete_message/<int:message_id>', methods=['POST'])
     @login_required
