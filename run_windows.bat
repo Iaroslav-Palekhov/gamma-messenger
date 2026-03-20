@@ -17,9 +17,9 @@ if errorlevel 1 (
 
 echo Python найден
 
-git clone https://github.com/Iaroslav-Palekhov/gamma-messenger.git
+git clone https://github.com/Iaroslav-Palekhov/proton-messenger.git
 
-cd gamma-messenger/
+cd proton-messenger/
 
 
 if not exist "venv" (
