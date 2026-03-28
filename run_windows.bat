@@ -43,6 +43,6 @@ echo Для остановки нажмите Ctrl+C
 echo.
 
 :: Запуск приложения
-py app.py
+py proton.py
 
 pause
