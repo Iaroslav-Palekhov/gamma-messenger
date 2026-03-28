@@ -10,6 +10,26 @@ security.py — Модуль безопасности мессенджера Pap
   6. Аудит-лог событий безопасности
   7. Заголовки безопасности HTTP
   8. Проверка силы пароля
+
+╔══════════════════════════════════════════════════════════════╗
+║              НАСТРОЙКИ БЕЗОПАСНОСТИ — ОБЯЗАТЕЛЬНО            ║
+║                  ОТРЕДАКТИРУЙТЕ ПЕРЕД ЗАПУСКОМ               ║
+╠══════════════════════════════════════════════════════════════╣
+║                                                              ║
+║  PASSWORD_PEPPER  (строка 1 ниже)                            ║
+║    Секрет, который примешивается к каждому паролю перед       ║
+║    хэшированием. Храните его только здесь или в env.         ║
+║    НИКОГДА не меняйте после первого запуска — все пароли      ║
+║    станут невалидными!                                        ║
+║                                                              ║
+║  MESSAGE_ENCRYPTION_KEY  (строка 2 ниже)                     ║
+║    AES-256-ключ для шифрования сообщений в БД.               ║
+║    Оставьте пустым — ключ сгенерируется и сохранится в        ║
+║    файл .encryption_key. Или задайте base64(32 байта) сами.  ║
+║    НИКОГДА не меняйте после первого запуска — все сообщения   ║
+║    станут нечитаемыми!                                        ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
 """
 
 import os
@@ -26,6 +46,30 @@ from functools import wraps
 from collections import defaultdict
 
 from flask import request, jsonify, session, g
+
+# ==============================================================
+# СТРОКА 1 — PEPPER ДЛЯ ПАРОЛЕЙ
+# Замените значение ниже на свой секретный случайный набор символов.
+# Пример генерации: python3 -c "import secrets; print(secrets.token_hex(32))"
+# ВАЖНО: после первого запуска НЕ МЕНЯЙТЕ — иначе пользователи не смогут войти.
+# ==============================================================
+PASSWORD_PEPPER = os.environ.get(
+    'PASSWORD_PEPPER',
+    'papirus-default-pepper-change-in-prod-2024'   # <-- ЗАМЕНИТЕ ЭТО
+)
+
+# ==============================================================
+# СТРОКА 2 — КЛЮЧ ШИФРОВАНИЯ СООБЩЕНИЙ
+# Оставьте пустым ('') — ключ создастся автоматически в файле .encryption_key
+# Или задайте base64-строку из 32 байт:
+#   python3 -c "import secrets,base64; print(base64.b64encode(secrets.token_bytes(32)).decode())"
+# ВАЖНО: после первого запуска НЕ МЕНЯЙТЕ — все сообщения в БД станут нечитаемыми.
+# ==============================================================
+MESSAGE_ENCRYPTION_KEY_VALUE = os.environ.get(
+    'MESSAGE_ENCRYPTION_KEY',
+    ''   # <-- оставьте пустым или вставьте свой ключ
+)
+
 from werkzeug.security import generate_password_hash, check_password_hash
 
 # ============================================================
@@ -88,7 +132,7 @@ class MessageEncryption:
     def _load_or_create_key(cls) -> bytes:
         """Загружает ключ из env или файла, или создаёт новый."""
         # Приоритет 1: переменная окружения
-        env_key = os.environ.get('MESSAGE_ENCRYPTION_KEY')
+        env_key = MESSAGE_ENCRYPTION_KEY_VALUE or os.environ.get('MESSAGE_ENCRYPTION_KEY')
         if env_key:
             try:
                 key = base64.b64decode(env_key)
@@ -180,7 +224,7 @@ class MessageEncryption:
 
 class PasswordSecurity:
     # Pepper хранится только в env, никогда в БД
-    PEPPER = os.environ.get('PASSWORD_PEPPER', 'papirus-default-pepper-change-in-prod-2024')
+    PEPPER = PASSWORD_PEPPER  # задаётся в начале файла (строка 1)
     
     # Минимальные требования к паролю
     MIN_LENGTH = 8
@@ -809,6 +853,30 @@ def init_security(app):
     security_logger.info(f"  Input Sanitization: ✓ ВКЛЮЧЕНО")
     security_logger.info(f"  Audit Logging: ✓ ВКЛЮЧЕНО → logs/security.log")
     security_logger.info("=" * 60)
+
+    # Предупреждение о дефолтных настройках
+    _warn_default = PASSWORD_PEPPER == 'papirus-default-pepper-change-in-prod-2024'
+    _warn_no_key  = not MESSAGE_ENCRYPTION_KEY_VALUE
+
+    print()
+    print("=" * 62)
+    print("  PAPIRUS — ПРОВЕРЬТЕ НАСТРОЙКИ БЕЗОПАСНОСТИ В security.py")
+    print("=" * 62)
+    if _warn_default:
+        print("  ⚠  СТРОКА 1 (PASSWORD_PEPPER) — используется дефолтное")
+        print("     значение. Замените на случайную строку перед запуском")
+        print("     в продакшене, иначе пароли пользователей уязвимы.")
+    else:
+        print("  ✓  СТРОКА 1 (PASSWORD_PEPPER) — задан пользовательский pepper.")
+    if _warn_no_key:
+        print("  ℹ  СТРОКА 2 (MESSAGE_ENCRYPTION_KEY) — ключ не задан,")
+        print("     будет использован автосгенерированный файл .encryption_key")
+    else:
+        print("  ✓  СТРОКА 2 (MESSAGE_ENCRYPTION_KEY) — ключ задан явно.")
+    print()
+    print("  Отредактировать: nano security.py  (ищите СТРОКА 1 / СТРОКА 2)")
+    print("=" * 62)
+    print()
 
 
     @classmethod

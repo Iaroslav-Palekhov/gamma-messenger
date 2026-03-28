@@ -17,8 +17,6 @@ from security import init_security
 from socketio_events import socketio
 from datetime import datetime
 import os
-import getpass
-import sys
 
 login_manager = LoginManager()
 
@@ -69,39 +67,6 @@ def create_app():
     # Регистрируем маршруты
     register_routes(app, db, login_manager)
 
-    # ============================================================
-    # ИНИЦИАЛИЗАЦИЯ БЕЗОПАСНОСТИ С РУЧНЫМ ВВОДОМ ПАРОЛЯ
-    # ============================================================
-    # Запрашиваем пароль для шифрования при запуске
-    print("\n" + "="*50)
-    print("ТРЕБУЕТСЯ ПАРОЛЬ ДЛЯ ШИФРОВАНИЯ")
-    print("="*50)
-    print("Этот пароль используется для защиты:")
-    print("- Пользовательских данных и сообщений")
-    print("- Сессий и cookies")
-    print("- Чувствительной информации в БД")
-    print("\nВАЖНО: Запомните этот пароль! Без него данные будут недоступны.")
-    print("="*50 + "\n")
-    
-    # Запрашиваем пароль (скрытый ввод)
-    encryption_password = getpass.getpass("Введите пароль для шифрования: ")
-    
-    # Проверка подтверждения (опционально, если нужно дважды ввести)
-    confirm_password = getpass.getpass("Подтвердите пароль: ")
-    
-    if encryption_password != confirm_password:
-        print("\nОШИБКА: Пароли не совпадают!")
-        sys.exit(1)
-    
-    if not encryption_password:
-        print("\nОШИБКА: Пароль не может быть пустым!")
-        sys.exit(1)
-    
-    # Устанавливаем пароль в переменную окружения для модуля security
-    os.environ['PAPIRUS_ENCRYPTION_KEY'] = encryption_password
-    
-    print("\nПароль принят. Инициализация системы безопасности...")
-    
     # Инициализируем модуль безопасности (после регистрации маршрутов!)
     init_security(app)
 
